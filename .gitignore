@@ -1,0 +1,16 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+
+# Datos generados (se reproducen con los scripts)
+data/fia_cache.sqlite*
+data/conversaciones.sqlite*
+data/chroma/
+informes/*
+!informes/.gitkeep
+
+# PDFs del reglamento: se descargan de fia.com (ver README)
+data/reglamento/*.pdf
+# (data/reglamento/glosario.md sí se commitea: es contenido propio del grupo)
+.pytest_cache/

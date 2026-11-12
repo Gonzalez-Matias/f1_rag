@@ -1,0 +1,74 @@
+# Estilo del informe PDF en oscuro (como su portada): acento rojo,
+# Barlow / Barlow Condensed / JetBrains Mono (incluidas en static/fuentes, licencia OFL).
+
+[server]
+enableStaticServing = true   # sirve static/ (tipografías)
+
+[client]
+toolbarMode = "minimal"
+
+[theme]
+base = "dark"
+primaryColor = "#e8433a"
+backgroundColor = "#14151c"
+secondaryBackgroundColor = "#1f2029"
+textColor = "#e6e6ea"
+linkColor = "#ff6b61"
+codeTextColor = "#ff6b61"
+codeBackgroundColor = "#2a1d1f"
+borderColor = "#2a2b36"
+showSidebarBorder = false
+baseRadius = "0.45rem"
+font = "Barlow, sans-serif"
+headingFont = "Barlow Condensed, Barlow, sans-serif"
+headingFontWeights = [800, 700, 700, 600, 600, 600]
+codeFont = "JetBrains Mono, monospace"
+
+[theme.sidebar]
+backgroundColor = "#0d0e13"
+secondaryBackgroundColor = "#1a1b23"
+textColor = "#e6e6ea"
+primaryColor = "#e8433a"
+codeBackgroundColor = "#1a1b23"
+
+[[theme.fontFaces]]
+family = "Barlow"
+url = "app/static/fuentes/Barlow-Regular.ttf"
+weight = 400
+
+[[theme.fontFaces]]
+family = "Barlow"
+url = "app/static/fuentes/Barlow-Medium.ttf"
+weight = 500
+
+[[theme.fontFaces]]
+family = "Barlow"
+url = "app/static/fuentes/Barlow-SemiBold.ttf"
+weight = 600
+
+[[theme.fontFaces]]
+family = "Barlow Condensed"
+url = "app/static/fuentes/BarlowCondensed-SemiBold.ttf"
+weight = 600
+
+[[theme.fontFaces]]
+family = "Barlow Condensed"
+url = "app/static/fuentes/BarlowCondensed-BoldItalic.ttf"
+weight = 700
+style = "italic"
+
+[[theme.fontFaces]]
+family = "Barlow Condensed"
+url = "app/static/fuentes/BarlowCondensed-ExtraBoldItalic.ttf"
+weight = 800
+style = "italic"
+
+[[theme.fontFaces]]
+family = "JetBrains Mono"
+url = "app/static/fuentes/JetBrainsMono-Medium.ttf"
+weight = 500
+
+[[theme.fontFaces]]
+family = "JetBrains Mono"
+url = "app/static/fuentes/JetBrainsMono-Bold.ttf"
+weight = 700

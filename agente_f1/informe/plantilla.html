@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Informe de sanciones · {{ gp.nombre }}</title>
+<style>
+  /* Tipografías incluidas en el repo (licencia OFL): el PDF se genera sin internet. */
+  @font-face { font-family: Barlow; font-weight: 400; src: url(fuentes/Barlow-Regular.ttf); }
+  @font-face { font-family: Barlow; font-weight: 500; src: url(fuentes/Barlow-Medium.ttf); }
+  @font-face { font-family: Barlow; font-weight: 600; src: url(fuentes/Barlow-SemiBold.ttf); }
+  @font-face { font-family: 'Barlow Condensed'; font-weight: 600; src: url(fuentes/BarlowCondensed-SemiBold.ttf); }
+  @font-face { font-family: 'Barlow Condensed'; font-weight: 700; font-style: italic; src: url(fuentes/BarlowCondensed-BoldItalic.ttf); }
+  @font-face { font-family: 'Barlow Condensed'; font-weight: 800; font-style: italic; src: url(fuentes/BarlowCondensed-ExtraBoldItalic.ttf); }
+  @font-face { font-family: 'JetBrains Mono'; font-weight: 500; src: url(fuentes/JetBrainsMono-Medium.ttf); }
+  @font-face { font-family: 'JetBrains Mono'; font-weight: 700; src: url(fuentes/JetBrainsMono-Bold.ttf); }
+
+  :root {
+    --tinta: #14151c;   /* fondo oscuro de "pit wall" */
+    --gris: #6b6d78;
+    --linea: #e3e4ea;
+    --suave: #f5f6f8;
+    --rojo: #e8433a;    /* acento de sanción */
+  }
+  @page {
+    size: A4; margin: 16mm 14mm 18mm 14mm;
+    @bottom-left  { content: "Pit Wall Agent · Informe de sanciones · {{ gp.nombre }}"; font: 500 7.5pt Barlow; color: #8b8d98; }
+    @bottom-right { content: counter(page) " / " counter(pages); font: 700 7.5pt 'JetBrains Mono'; color: #8b8d98; }
+  }
+  @page :first { margin-top: 0; }
+  * { box-sizing: border-box; }
+  body { font: 400 9.5pt/1.45 Barlow, sans-serif; color: var(--tinta); margin: 0; }
+
+  /* ---------- portada ---------- */
+  .portada { background: var(--tinta); color: #fff; margin: 0 -14mm; padding: 14mm 14mm 9mm; }
+  .sobre { font: 600 8pt Barlow; letter-spacing: .18em; text-transform: uppercase; color: #a3a5b0; }
+  h1 { font: italic 800 32pt/1 'Barlow Condensed'; margin: 3mm 0 2mm; }
+  .meta { color: #c9cad3; font-size: 10pt; }
+  .cuadros { display: flex; gap: 3mm; margin-top: 7mm; }
+  .cuadro { flex: 1; background: #1f2029; border-radius: 2mm; padding: 3mm 4mm; }
+  .cuadro b { display: block; font: 700 22pt/1 'JetBrains Mono'; color: #fff; }
+  .cuadro span { font-size: 8pt; color: #a3a5b0; }
+  .cuadro.total b { color: var(--rojo); }
+
+  h2 { font: italic 700 15pt 'Barlow Condensed'; margin: 7mm 0 2.5mm; text-transform: uppercase; letter-spacing: .02em; }
+
+  /* ---------- torre de tiempos (resumen) ---------- */
+  table.torre { width: 100%; border-collapse: collapse; }
+  .torre td { padding: 1.6mm 2mm; border-bottom: 1px solid var(--linea); vertical-align: middle; }
+  .torre tr:nth-child(even) td { background: var(--suave); }
+  .num { display: inline-block; min-width: 9mm; text-align: center; border-radius: 1.2mm;
+         font: 700 9pt 'JetBrains Mono'; color: #fff; padding: .6mm 1.2mm; }
+  .codigo { font: 700 9pt 'JetBrains Mono'; letter-spacing: .05em; }
+  .sesion { color: var(--gris); font-size: 8.5pt; }
+  .pen { font: 700 9pt 'JetBrains Mono'; color: var(--rojo); text-align: right; white-space: nowrap; }
+  .pen.leve { color: var(--gris); }
+
+  /* ---------- fichas ---------- */
+  .ficha { break-inside: avoid; border: 1px solid var(--linea); border-radius: 2.5mm; margin: 0 0 5mm; overflow: hidden; }
+  .ficha-cab { display: flex; align-items: center; gap: 3.5mm; padding: 3mm 4mm; background: var(--suave); }
+  .ficha-cab .num { font-size: 13pt; min-width: 13mm; padding: 1.2mm 2mm; }
+  .quien { flex: 1; }
+  .quien b { font: italic 700 14pt/1.1 'Barlow Condensed'; display: block; }
+  .quien span { color: var(--gris); font-size: 8.5pt; }
+  .insignia { font: 700 12pt 'JetBrains Mono'; color: #fff; background: var(--rojo); border-radius: 1.5mm; padding: 1.5mm 3mm; white-space: nowrap; }
+  .insignia.leve { background: var(--tinta); }
+  .ficha-cuerpo { padding: 3.5mm 4mm 2mm; }
+  .bloque { margin-bottom: 3mm; }
+  .bloque h3 { font: 700 7.5pt Barlow; letter-spacing: .14em; text-transform: uppercase; color: var(--gris); margin: 0 0 1mm; }
+  .bloque p { margin: 0; }
+  .regla { border-radius: 1.5mm; background: #fff5f4; padding: 2.5mm 3.5mm; }
+  .cita { font: 700 9pt 'JetBrains Mono'; color: var(--rojo); }
+  .reglamento { color: var(--gris); font-size: 7.5pt; }
+  .original { font-style: italic; color: var(--gris); font-size: 8pt; margin-top: 1.2mm; }
+  .ficha-pie { border-top: 1px solid var(--linea); padding: 2mm 4mm; font-size: 8pt; color: var(--gris); display: flex; justify-content: space-between; }
+  .ficha-pie a { color: var(--tinta); font-weight: 600; text-decoration: none; }
+
+  /* ---------- glosario ---------- */
+  dl.glosario { columns: 2; column-gap: 8mm; }
+  dl.glosario div { break-inside: avoid; margin-bottom: 2.5mm; }
+  dt { font: italic 700 10.5pt 'Barlow Condensed'; }
+  dd { margin: 0; color: #3a3b45; }
+  .nota { color: var(--gris); font-size: 8pt; margin-top: 6mm; border-top: 1px solid var(--linea); padding-top: 2mm; }
+</style>
+</head>
+<body>
+
+<section class="portada">
+  <div class="sobre">Informe de sanciones · Temporada {{ gp.año }}</div>
+  <h1>{{ gp.nombre }}</h1>
+  <div class="meta">{% if gp.circuito %}{{ gp.circuito }} · {% endif %}{% if gp.fechas %}{{ gp.fechas }} · {% endif %}generado el {{ generado }}</div>
+  <div class="cuadros">
+    <div class="cuadro total"><b>{{ sanciones|length }}</b><span>sanciones</span></div>
+    {% for tipo, n in resumen %}
+    <div class="cuadro"><b>{{ n }}</b><span>{{ tipo }}</span></div>
+    {% endfor %}
+  </div>
+</section>
+
+<h2>Resumen</h2>
+<table class="torre">
+  {% for s in sanciones %}
+  <tr>
+    <td style="width:12mm"><span class="num" style="background:#{{ s.color }}">{{ s.auto }}</span></td>
+    <td style="width:12mm" class="codigo">{{ s.codigo }}</td>
+    <td><b>{{ s.piloto }}</b> · {{ s.motivo_corto }}</td>
+    <td class="sesion">{{ s.sesion }}</td>
+    <td class="pen {{ 'leve' if s.leve }}">{{ s.etiqueta }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Las sanciones, una por una</h2>
+{% for s in fichas %}
+<article class="ficha">
+  <div class="ficha-cab">
+    <span class="num" style="background:#{{ s.color }}">{{ s.auto }}</span>
+    <div class="quien"><b>{{ s.piloto }}</b><span>{{ s.equipo }} · {{ s.sesion }}</span></div>
+    <span class="insignia {{ 'leve' if s.leve }}">{{ s.etiqueta }}</span>
+  </div>
+  <div class="ficha-cuerpo">
+    <div class="bloque"><h3>Qué pasó</h3><p>{{ s.que_paso }}</p></div>
+    <div class="bloque regla">
+      {% if s.cita %}<span class="cita">Art. {{ s.cita }}</span>{% endif %}
+      {% if s.reglamento %}<span class="reglamento">· {{ s.reglamento }}</span>{% endif %}
+      <p>{{ s.regla_simple }}</p>
+      {% if s.regla_original %}<p class="original">“{{ s.regla_original }}”</p>{% endif %}
+    </div>
+    <div class="bloque"><h3>Por qué esta sanción</h3><p>{{ s.por_que }}</p></div>
+  </div>
+  <div class="ficha-pie">
+    <span>Decisión de los comisarios · Doc {{ s.doc }} · {{ s.fecha }}</span>
+    <a href="{{ s.url }}">Ver documento oficial →</a>
+  </div>
+</article>
+{% endfor %}
+
+{% if glosario %}
+<h2>Glosario</h2>
+<dl class="glosario">
+  {% for termino, definicion in glosario %}
+  <div><dt>{{ termino }}</dt><dd>{{ definicion }}</dd></div>
+  {% endfor %}
+</dl>
+{% endif %}
+
+<p class="nota">Fuentes: documentos de decisión de los comisarios de la FIA{% if gp.reglamento %} y {{ gp.reglamento }}{% endif %}.
+Las explicaciones en lenguaje simple son de Pit Wall Agent y no reemplazan al texto oficial.</p>
+</body>
+</html>

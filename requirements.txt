@@ -1,0 +1,32 @@
+# Agente
+langchain>=1.4,<2
+langgraph>=1.2,<2
+langgraph-checkpoint-sqlite>=3.1,<4   # memoria persistente (conversaciones)
+
+# Servidor MCP propio "f1-data" y su cliente
+mcp>=1.30,<2
+langchain-mcp-adapters>=0.3,<1
+
+# Proveedores de LLM (alcanza con instalar el que se use; ver README)
+langchain-google-genai>=4.4,<5   # Gemini (chat) + embeddings del RAG -> obligatorio
+langchain-openai>=1.0,<2
+langchain-deepseek>=1.0,<2
+langchain-anthropic>=1.0,<2
+langchain-ollama>=1.1,<2         # modelos locales (Ollama); LM Studio usa langchain-openai
+
+# RAG
+langchain-chroma>=1.1,<2
+chromadb>=1.5,<2
+
+# Informe (PDF). WeasyPrint necesita Pango: ver README
+jinja2>=3.1,<4
+weasyprint>=66
+
+# UI y configuración
+streamlit>=1.67,<2
+python-dotenv>=1.2,<2
+
+# Tests
+pytest>=8,<10
+
+# Requisito del sistema (no es de pip): pdftotext, del paquete poppler-utils
