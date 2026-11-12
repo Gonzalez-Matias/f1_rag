@@ -4,9 +4,12 @@ __pycache__/
 *.pyc
 
 # Datos generados (se reproducen con los scripts)
-data/fia_cache.sqlite*
 data/conversaciones.sqlite*
-data/chroma/
+# fia_cache.sqlite y data/chroma/ se commitean para el deploy en Streamlit Cloud
+# (reconstruirlos tarda ~35 min). Solo se ignoran los archivos temporales de SQLite.
+data/fia_cache.sqlite-*
+data/chroma/**/*-wal
+data/chroma/**/*-shm
 informes/*
 !informes/.gitkeep
 

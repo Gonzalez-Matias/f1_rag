@@ -218,6 +218,23 @@ Tests (sin red ni API keys; usan texto de PDFs reales en `tests/fixtures/`):
 python -m pytest
 ```
 
+## Deploy en Streamlit Community Cloud
+
+El repo ya trae lo necesario: `data/chroma/` y `data/fia_cache.sqlite` están commiteados (no se
+reconstruyen en la nube) y `packages.txt` instala `pdftotext` y Pango.
+
+1. En [share.streamlit.io](https://share.streamlit.io), **Create app** -> este repo, rama y `app.py`.
+2. **Advanced settings**: Python 3.12 y los secrets en TOML (Streamlit los expone como variables
+   de entorno, así que `config.py` los lee igual que desde el `.env`):
+   ```toml
+   GOOGLE_API_KEY = "..."
+   LLM_PROVIDER = "gemini"
+   ```
+3. **Deploy**.
+
+El disco es efímero: conversaciones, informes y refrescos del caché de la FIA se pierden al
+reiniciar la app. Si la app es pública, cualquiera usa la clave cargada en los secrets.
+
 ## Estructura
 
 ```
