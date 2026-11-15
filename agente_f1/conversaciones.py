@@ -18,6 +18,8 @@ from . import config
 from .llm import LLMProvider
 from .util import parse_json
 
+INTERRUMPIDA = "Respuesta interrumpida."
+
 _lock = threading.Lock()
 _conn = None
 _saver = None
@@ -104,3 +106,29 @@ def turnos(agent, thread_id: str, provider: LLMProvider) -> list[dict]:
         elif isinstance(m, ToolMessage) and m.tool_call_id in pendientes:
             pendientes.pop(m.tool_call_id)["resultado"] = parse_json(m.content)
     return out
+
+
+def cerrar_turno_interrumpido(agent, thread_id: str) -> bool:
+    """Deja consistente una conversación cuyo último turno se cortó (botón Detener, recarga).
+
+    Un corte puede dejar guardada una llamada a una tool sin su resultado, y con eso los
+    modelos rechazan el mensaje siguiente. Se completa cada llamada pendiente con un
+    resultado "interrumpido" y se cierra el turno con una respuesta corta, así la
+    conversación se puede seguir. Devuelve True si hubo algo que cerrar.
+    """
+    cfg = {"configurable": {"thread_id": thread_id}}
+    mensajes = agent.get_state(cfg).values.get("messages", [])
+    if not mensajes:
+        return False
+    ultimo = mensajes[-1]
+    if isinstance(ultimo, AIMessage) and not ultimo.tool_calls:
+        return False  # el turno terminó bien
+    resueltas = {m.tool_call_id for m in mensajes if isinstance(m, ToolMessage)}
+    nuevos = [ToolMessage(content='{"error": "Interrumpido por el usuario."}', tool_call_id=tc["id"], name=tc["name"])
+              for m in mensajes if isinstance(m, AIMessage) for tc in m.tool_calls if tc["id"] not in resueltas]
+    nuevos.append(AIMessage(content=INTERRUMPIDA))
+    # Se reenvían también los mensajes ya visibles: el paso que se cortó puede no haber llegado
+    # a guardarse (queda como escritura pendiente) y update_state lo descartaría. Con el mismo
+    # id, los que ya estaban guardados se reemplazan por sí mismos y no se duplican.
+    agent.update_state(cfg, {"messages": [*mensajes, *nuevos]}, as_node="model")
+    return True

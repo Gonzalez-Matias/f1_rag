@@ -38,3 +38,30 @@ def guardar(datos: dict, destino: Path = config.INFORMES_DIR) -> dict:
     except (ImportError, OSError) as exc:  # OSError: faltan las librerías del sistema (Pango)
         out["aviso"] = f"No se pudo generar el PDF ({exc}); quedó solo el HTML."
     return out
+
+
+# Hoja simulada para ver el informe en pantalla: la plantilla está pensada para imprimir
+# (los márgenes los pone @page), así que acá se agregan como relleno del body.
+_ESTILO_VISTA = ("<style>html{background:#2a2b36} body{background:#fff; max-width:210mm; margin:0 auto; "
+                 "padding:0 14mm 12mm; min-height:100vh}</style>")
+
+
+def vista_previa(contenido: str, url_fuentes: str = "/app/static/fuentes/") -> str:
+    """HTML del informe listo para mostrar dentro de la app (tipografías servidas por Streamlit)."""
+    return contenido.replace("url(fuentes/", f"url({url_fuentes}").replace("</head>", _ESTILO_VISTA + "</head>", 1)
+
+
+def listar(destino: Path = config.INFORMES_DIR, maximo: int | None = None) -> list[dict]:
+    """Informes generados, del más nuevo al más viejo: {"titulo", "generado", "html", "pdf"}."""
+    out = []
+    for ruta in sorted(destino.glob("*.html"), reverse=True)[:maximo]:
+        cabecera = ruta.read_text(encoding="utf-8", errors="replace")[:600]
+        titulo = re.search(r"<title>(?:Informe de sanciones · )?(.*?)</title>", cabecera, re.S)
+        try:
+            generado = datetime.strptime(ruta.name[:15], "%Y%m%d-%H%M%S")
+        except ValueError:
+            generado = datetime.fromtimestamp(ruta.stat().st_mtime)
+        pdf = ruta.with_suffix(".pdf")
+        out.append({"titulo": titulo.group(1).strip() if titulo else ruta.stem, "generado": generado,
+                    "html": ruta, "pdf": pdf if pdf.exists() else None})
+    return out
