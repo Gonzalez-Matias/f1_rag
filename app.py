@@ -6,8 +6,9 @@
 - Centro: el chat. Cada respuesta tiene un bloque desplegable "Razonamiento" con todo
   el proceso en orden (razonamiento del modelo y cada tool, con su fuente, argumentos y
   resultado en JSON). Afuera del bloque queda solo la respuesta final.
-- Informe: si la respuesta explicó sanciones, debajo aparece el botón "Generar informe".
-  Un informe generado se ve en la misma página (vista previa) y se descarga en PDF o HTML.
+- Informe: cuando el agente explica sanciones de una carrera, el informe (una ficha por
+  sanción) es parte de la respuesta: se ve en el chat, debajo del texto, y se descarga en
+  PDF o HTML. Los informes anteriores quedan en la barra lateral.
 - Mientras el agente responde no se puede enviar otro mensaje: hay un botón "Detener".
 
 Las conversaciones se guardan en data/conversaciones.sqlite (checkpointer de LangGraph):
@@ -204,18 +205,30 @@ def agente_de_la_sesion(provider):
 
 # ---------------------------------------------------------------- informes
 
-def render_informe(ruta_html: Path, ruta_pdf: Path | None, clave: str, alto: int = 620):
-    """Vista previa del informe (HTML) y botones de descarga."""
+def render_descargas(ruta_html: Path, ruta_pdf: Path | None, clave: str):
     columnas = st.columns([1.3, 1.3, 3])
     if ruta_pdf and ruta_pdf.exists():
         columnas[0].download_button("Descargar PDF", ruta_pdf.read_bytes(), file_name=ruta_pdf.name,
                                     mime="application/pdf", key=f"dl-{clave}-pdf", type="primary",
                                     use_container_width=True)
+    columnas[1].download_button("Descargar HTML", ruta_html.read_bytes(), file_name=ruta_html.name,
+                                mime="text/html", key=f"dl-{clave}-html", use_container_width=True)
+
+
+def render_informe(ruta_html: Path, ruta_pdf: Path | None, clave: str, en_chat: bool = False):
+    """El informe en pantalla y sus descargas.
+
+    En el chat es parte de la respuesta: va entero, con los colores de la app, y las descargas
+    al final. En la lista de informes se ve como la hoja del PDF, con las descargas arriba.
+    El HTML sale de nuestra plantilla (Jinja con autoescape): los textos del modelo van escapados.
+    """
     contenido = ruta_html.read_text(encoding="utf-8")
-    columnas[1].download_button("Descargar HTML", contenido, file_name=ruta_html.name, mime="text/html",
-                                key=f"dl-{clave}-html", use_container_width=True)
-    # El HTML sale de nuestra plantilla (Jinja con autoescape): los textos del modelo van escapados.
-    st.iframe(informe_render.vista_previa(contenido), height=alto)
+    if en_chat:
+        st.iframe(informe_render.vista_previa(contenido, modo="chat"), height="content")
+        render_descargas(ruta_html, ruta_pdf, clave)
+    else:
+        render_descargas(ruta_html, ruta_pdf, clave)
+        st.iframe(informe_render.vista_previa(contenido), height=620)
 
 
 @st.dialog("Informe de sanciones", width="large")
@@ -277,7 +290,7 @@ with st.sidebar:
         for inf in informes:
             # "Gran Premio de São Paulo 2026 - ..." -> "São Paulo 2026 - ...": lo que distingue un informe de otro
             corto = re.sub(r"^Gran Premio (?:de la |del |de )", "", inf["titulo"])
-            if st.button(f"{inf['generado']:%d/%m} · {corto}", key=f"inf-{inf['html'].stem}",
+            if st.button(f"{inf['generado']:%d/%m %H:%M} · {corto}", key=f"inf-{inf['html'].stem}",
                          use_container_width=True, disabled=ocupado,
                          help=f"{inf['titulo']} · generado el {inf['generado']:%d/%m/%Y a las %H:%M}"):
                 abrir_informe(inf)
@@ -435,11 +448,11 @@ for t, turno in enumerate(historial):
         else:
             st.markdown(turno["respuesta"])
         generados = informes_del_turno(turno["proceso"])
+        # El informe es parte de la respuesta: las fichas van debajo del texto, con la descarga.
         for n, (ruta_html, ruta_pdf) in enumerate(generados):
-            with st.expander("Informe · vista previa y descarga", expanded=t == len(historial) - 1):
-                render_informe(ruta_html, ruta_pdf, clave=f"{st.session_state.thread_id}-{t}-{n}")
-        # El informe se ofrece desde la interfaz (no lo ofrece el modelo en cada respuesta):
-        # solo en la última respuesta, si explicó sanciones y todavía no se generó.
+            render_informe(ruta_html, ruta_pdf, clave=f"{st.session_state.thread_id}-{t}-{n}", en_chat=True)
+        # Si el modelo explicó sanciones sin armar el informe (ej. varias carreras), se puede
+        # pedir desde acá: solo en la última respuesta.
         if t == len(historial) - 1 and not generados and not ocupado and hay_decisiones(turno["proceso"]):
             with st.container(key="pw-acciones"):
                 st.button("Generar informe en PDF", on_click=preguntar, args=(PEDIR_INFORME,),

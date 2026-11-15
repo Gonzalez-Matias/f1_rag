@@ -102,5 +102,7 @@ def test_listar_informes(tmp_path):
 def test_vista_previa_usa_las_tipografias_de_la_app():
     original = "<html><head><style>@font-face { src: url(fuentes/Barlow-Regular.ttf); }</style></head><body>x</body></html>"
     vista = render.vista_previa(original)
+    chat = render.vista_previa(original, modo="chat")
+    assert "--tinta: #e6e6ea" in chat and "max-width:210mm" not in chat and 'target="_blank"' in chat
     assert "url(/app/static/fuentes/Barlow-Regular.ttf)" in vista and "url(fuentes/" not in vista
     assert vista.index("max-width:210mm") < vista.index("</head>")   # la hoja simulada va en el <head>
