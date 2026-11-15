@@ -48,23 +48,41 @@ def carreras_con_actividad(desde: float, hasta: float) -> list[dict]:
     return out
 
 
+def carreras(año: int) -> list[dict]:
+    """Meetings de una temporada que son carreras, en orden cronológico.
+
+    Saca los tests de pretemporada y las carreras canceladas: así la posición en la
+    lista (empezando en 1) es el número de ronda del campeonato.
+    """
+    meetings = [m for m in get("meetings", year=año)
+                if not m.get("is_cancelled") and "testing" not in normalizar(m.get("meeting_name"))]
+    return sorted(meetings, key=lambda m: m.get("date_start") or "")
+
+
 def buscar_meeting(año: int, carrera: str) -> dict | None:
     """Busca una carrera por nombre (ej. 'Sao Paulo', 'Monaco') en una temporada."""
     q = normalizar(carrera)
-    for m in get("meetings", year=año):
+    for m in carreras(año):
         campos = (m.get("meeting_name"), m.get("location"), m.get("country_name"), m.get("circuit_short_name"))
         if any(q in normalizar(c) for c in campos if c):
             return m
     return None
 
 
-def buscar_piloto(nombre: str, año: int) -> list[dict]:
-    """Pilotos que coinciden con el nombre en la temporada (número, equipo, nombre completo)."""
+def buscar_piloto(nombre: str, año: int, meeting_key: int | None = None) -> list[dict]:
+    """Pilotos que coinciden con el nombre (número, equipo, nombre completo).
+
+    Con `meeting_key` se busca entre los que corrieron esa carrera (sirve para reemplazos a
+    mitad de temporada); si no, entre los de la última sesión de la temporada.
+    """
     q = normalizar(nombre)
-    sesiones = get("sessions", year=año)
-    sesion = sesiones[-1]["session_key"] if sesiones else "latest"
+    if meeting_key is not None:
+        pilotos = get("drivers", meeting_key=meeting_key)
+    else:
+        sesiones = get("sessions", year=año)
+        pilotos = get("drivers", session_key=sesiones[-1]["session_key"] if sesiones else "latest")
     vistos, out = set(), []
-    for d in get("drivers", session_key=sesion):
+    for d in pilotos:
         nombre_completo = d.get("full_name") or ""
         if q in normalizar(nombre_completo) or q == normalizar(d.get("name_acronym")):
             if d.get("driver_number") not in vistos:

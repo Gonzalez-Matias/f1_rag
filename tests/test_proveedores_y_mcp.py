@@ -27,8 +27,13 @@ def test_modelos_locales_no_necesitan_clave():
 def test_servidor_mcp_expone_las_tools_de_datos():
     from agente_f1.mcp_f1.servidor import mcp
     tools = {t.name: t for t in asyncio.run(mcp.list_tools())}
-    assert set(tools) == {"buscar_piloto", "sanciones_de_piloto", "sanciones_de_carrera",
-                          "ultima_sancion", "incidentes_en_carrera"}
+    assert set(tools) == {"openf1_calendario", "openf1_buscar_piloto", "openf1_mensajes_race_control",
+                          "fia_decisiones_de_piloto", "fia_decisiones_de_carrera",
+                          "fia_ultima_decision_de_piloto", "sanciones_de_piloto_completo"}
+    # el nombre dice la fuente y la descripción también
+    for nombre, t in tools.items():
+        fuente = "[OpenF1 + FIA]" if nombre.startswith("sanciones") else f"[{'OpenF1' if nombre.startswith('openf1') else 'FIA'}]"
+        assert t.description.startswith(fuente), nombre
     # cada argumento tiene descripción (lo pide la consigna para las tools)
     for t in tools.values():
         assert all(p.get("description") for p in t.inputSchema["properties"].values()), t.name
