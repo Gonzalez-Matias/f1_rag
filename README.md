@@ -44,7 +44,7 @@ flowchart LR
 | Servidor MCP propio `f1-data` | `agente_f1/mcp_f1/` | Expone las 7 tools de datos de F1 por MCP, con la fuente en el nombre (`openf1_*`, `fia_*`) y una consulta conjunta (`sanciones_de_piloto_completo`) que une las dos fuentes en una llamada: el agente las usa como cualquier cliente, y el mismo servidor se puede conectar a Claude Desktop, Claude Code u otro cliente MCP |
 | Fuente FIA | `agente_f1/fuentes/fia/` | La decisión oficial (motivo, artículos) solo está en los PDFs de la FIA. Índice local en SQLite; solo se bajan los PDFs que se necesitan |
 | Fuente OpenF1 | `agente_f1/fuentes/openf1.py` | Nombre → número de auto; calendario (ronda, lugar, fechas); secuencia de Race Control; detectar carreras nuevas para actualizar el índice |
-| RAG del reglamento | `agente_f1/rag/` | El texto del reglamento por año no está en el modelo. Corpus de 7 documentos (reglamentos 2025 y 2026, Código Deportivo Internacional y su Apéndice L de 2025 y 2026, y un glosario propio). Párrafos por inciso + similitud del coseno; se cita el inciso exacto (ej. B1.6.3b) |
+| RAG del reglamento | `agente_f1/rag/` | El texto del reglamento por año no está en el modelo. Corpus de 10 documentos (reglamento deportivo, Código Deportivo Internacional y su Apéndice L de 2024, 2025 y 2026, y un glosario propio). Párrafos por inciso + similitud del coseno; se cita el inciso exacto (ej. B1.6.3b) |
 | Glosario propio | `data/reglamento/glosario.md` | Contenido del grupo: ~40 términos explicados para un fan nuevo, con su nombre en inglés. Entra al RAG como un documento más y lo usa el agente para explicar en simple |
 | Informe (PDF y HTML) | `agente_f1/informe/` | Resultado tangible: portada, resumen tipo torre de tiempos y una ficha por sanción con la regla aplicada y glosario. El modelo escribe solo los textos en simple; la decisión, el artículo, la fecha, el link y el texto del reglamento salen de las fuentes |
 | Middleware: `ToolCallLimitMiddleware` (LangChain) | `agente_f1/agent.py` | Único middleware. Limita a 6 búsquedas en el reglamento y 20 llamadas a tools por pregunta. Un modelo de razonamiento llegó a hacer ~30 búsquedas seguidas de un artículo que no estaba en el corpus; el prompt lo desalienta pero no lo garantiza, y el middleware corta donde el grafo ejecuta la tool, sin depender del modelo. No se resolvió con código propio porque haría falta contar llamadas por ejecución dentro del grafo, que es justo lo que este middleware ya hace |
@@ -124,6 +124,9 @@ solo esa carrera (1 pedido a la FIA).
 | `2025_international_sporting_code.pdf` | Código Deportivo Internacional 2025 | ídem |
 | `2026_isc_appendix_l.pdf` | Apéndice L 2026 (se usa el Capítulo IV, código de conducción) | ídem |
 | `2025_isc_appendix_l.pdf` | Apéndice L 2025 | ídem |
+| `2024_f1_sporting_regulations_iss07.pdf` | 2024 Formula 1 Sporting Regulations, Issue 7 | [fia.com › Formula One](https://www.fia.com/regulation/category/110) |
+| `2024_international_sporting_code.pdf` | Código Deportivo Internacional 2024 | [fia.com › International Sporting Code](https://www.fia.com/regulation/category/123) |
+| `2024_isc_appendix_l.pdf` | Apéndice L 2024 | ídem |
 | `glosario.md` | Glosario propio del grupo (está en el repo) | — |
 
 Los PDFs no se suben al repo: se descargan de los links y se guardan con esos nombres
