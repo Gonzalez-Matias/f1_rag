@@ -101,6 +101,7 @@ st.markdown("""
   div[data-testid="stExpander"] summary p, div[data-testid="stStatusWidget"] summary p {
       font: 700 .72rem 'Barlow', sans-serif !important; letter-spacing: .14em; text-transform: uppercase; color: #a3a5b0;}
   .pw-razon {color: #a3a5b0; font-style: italic;}
+  .pw-actividad {font: 500 .74rem 'JetBrains Mono', monospace; color: #8b8d98; margin: .1rem 0 0 .2rem;}
   .pw-tool {display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; margin: .8rem 0 .25rem;}
   .pw-tool b {font: 700 .85rem 'JetBrains Mono', monospace; color: #fff;}
   .pw-tool span {font: 500 .78rem 'JetBrains Mono', monospace; color: #8b8d98;}
@@ -146,10 +147,12 @@ def fuente_de(tool: str) -> tuple[str, str]:
 
 def nueva_conversacion():
     st.session_state.thread_id = str(uuid.uuid4())
+    st.session_state.recien_respondida = None
 
 
 def abrir(thread_id: str):
     st.session_state.thread_id = thread_id
+    st.session_state.recien_respondida = None
     conv = conversaciones.obtener(thread_id)
     if conv and conv["proveedor"] in PROVEEDORES:
         st.session_state.modelo["proveedor"] = conv["proveedor"]  # cada conversación sigue con su proveedor
@@ -177,6 +180,9 @@ if "modelo" not in st.session_state:
 st.session_state.setdefault("pendiente", None)   # pregunta a enviar en esta ejecución
 st.session_state.setdefault("generando", None)   # thread_id del turno en curso (None si no hay)
 st.session_state.setdefault("detenida", False)
+# Conversación cuya última respuesta se acaba de generar en esta sesión: su bloque
+# "Razonamiento" queda abierto al terminar, como estaba durante la respuesta.
+st.session_state.setdefault("recien_respondida", None)
 
 # Hay una pregunta por responder en esta ejecución: se bloquea todo lo que cambiaría de contexto.
 ocupado = st.session_state.pendiente is not None
@@ -441,7 +447,8 @@ for t, turno in enumerate(historial):
     render_pregunta(turno["pregunta"])
     with st.chat_message("assistant"):
         if turno["proceso"]:
-            with st.expander("Razonamiento", expanded=False):
+            recien = t == len(historial) - 1 and st.session_state.recien_respondida == st.session_state.thread_id
+            with st.expander("Razonamiento", expanded=recien):
                 render_proceso(turno["proceso"])
         if turno["respuesta"] == conversaciones.INTERRUMPIDA:
             st.markdown(f'<p class="pw-interrumpida">{conversaciones.INTERRUMPIDA}</p>', unsafe_allow_html=True)
@@ -471,7 +478,10 @@ if pregunta:
     st.session_state.generando = st.session_state.thread_id
     render_pregunta(pregunta)
     with st.chat_message("assistant"):
-        proceso_box = st.status("Razonando…", expanded=True)  # todo el proceso, en orden
+        # Todo el proceso, en orden. Arranca abierto y durante la respuesta no se le hace
+        # ningún update(): cada update vuelve a plegar el bloque, aunque el usuario lo haya abierto.
+        proceso_box = st.status("Razonamiento", expanded=True)
+        actividad = st.empty()                                 # qué está haciendo ahora
         respuesta_box = st.empty()                             # solo la respuesta final
         # Un clic acá corta esta ejecución (Streamlit la interrumpe en el próximo paso del
         # stream) y arranca otra, que cierra el turno. Si hay una tool en curso, corta al terminar.
@@ -517,23 +527,26 @@ if pregunta:
                             with slot.container():
                                 render_tool(ev)
                             pendientes[tc["id"]] = (ev, slot)
-                            proceso_box.update(label=f"Consultando {fuente_de(tc['name'])[0]}…")
+                            actividad.markdown(f'<p class="pw-actividad">Consultando {fuente_de(tc["name"])[0]}…</p>',
+                                               unsafe_allow_html=True)
                     elif isinstance(m, ToolMessage) and m.tool_call_id in pendientes:
                         ev, slot = pendientes.pop(m.tool_call_id)
                         ev["resultado"] = parse_json(m.content)
                         with slot.container():
                             render_tool(ev)
                         slot_razon = None
-                        proceso_box.update(label="Razonando…")
+                        actividad.markdown('<p class="pw-actividad">Razonando…</p>', unsafe_allow_html=True)
     except Exception as exc:  # ej. 429 agotados los reintentos, clave inválida, servidor local apagado
         # El error puede haber dejado una tool sin resultado: se cierra el turno para poder seguir.
         conversaciones.cerrar_turno_interrumpido(agent, st.session_state.thread_id)
         st.session_state.generando = None
         proceso_box.update(label="Error", state="error", expanded=False)
+        actividad.empty()
         respuesta_box.markdown(f"Ocurrió un error con el modelo: `{exc}`")
         st.stop()
 
     st.session_state.generando = None
-    proceso_box.update(label="Razonamiento", state="complete", expanded=False)
+    st.session_state.recien_respondida = st.session_state.thread_id
+    actividad.empty()
     respuesta_box.markdown(respuesta)
-    st.rerun()  # redibuja desde el checkpointer (proceso plegado, conversación en la lista)
+    st.rerun()  # redibuja desde el checkpointer (informe, botones, conversación en la lista)
