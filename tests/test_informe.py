@@ -65,3 +65,14 @@ def test_genera_pdf(tmp_path, monkeypatch):
     if shutil.which("pdffonts"):
         fuentes = subprocess.run(["pdffonts", str(pdf)], capture_output=True, text=True).stdout
         assert "Barlow" in fuentes and "JetBrains" in fuentes
+
+
+def test_el_informe_sale_aunque_falle_el_reglamento(monkeypatch):
+    """Si la base del reglamento falla, la ficha se arma igual, sin el texto original del artículo."""
+    from agente_f1.informe import datos
+
+    def falla(*a, **k):
+        raise RuntimeError("Error executing plan: Internal error: Error finding id")
+    monkeypatch.setattr(datos.store, "motivo_no_disponible", lambda: None)
+    monkeypatch.setattr(datos.store, "buscar", falla)
+    assert datos._texto_reglamento(2026, "B1.6.3b") is None
