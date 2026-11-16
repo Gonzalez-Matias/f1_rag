@@ -6,6 +6,7 @@ Car 87 - ...") y solo se baja el PDF de los candidatos que todavía no estén pr
 import re
 
 from ...util import normalizar
+from .. import calendario
 from . import scraper
 from .cache import conectar
 from .sync import auto_actualizar
@@ -18,10 +19,10 @@ SIN_SANCION_RE = re.compile(r"no\s+further\s+action", re.I)
 
 # ---------------------------------------------------------------- helpers
 
-def _buscar_carrera(con, año: int, nombre: str) -> dict:
-    carreras = scraper.carreras(con, año)
+def _por_nombre(carreras: list[dict], nombre: str) -> dict | None:
+    """Carrera del índice de la FIA por su nombre oficial (o parte). None si ninguna coincide."""
     q = normalizar(nombre)
-    coinciden = [c for c in carreras if q in normalizar(c["name"])]
+    coinciden = [c for c in carreras if q and q in normalizar(c["name"])]
     exactas = [c for c in coinciden if normalizar(c["name"]) == q]
     gp = [c for c in coinciden if "grand prix" in normalizar(c["name"])]
     if exactas:
@@ -30,8 +31,30 @@ def _buscar_carrera(con, año: int, nombre: str) -> dict:
         return coinciden[0]
     if len(gp) == 1:
         return gp[0]
-    opciones = [c["name"] for c in (coinciden or carreras)]
-    raise ValueError(f"No se pudo identificar la carrera '{nombre}' en {año}. Opciones: {opciones}")
+    if coinciden:
+        raise ValueError(f"'{nombre}' coincide con más de una carrera: {[c['name'] for c in coinciden]}")
+    return None
+
+
+def _buscar_carrera(con, año: int, nombre: str | int) -> dict:
+    """Carrera del índice por nombre oficial, número de ronda ("5"), lugar, país o circuito.
+
+    El índice de la FIA solo tiene el nombre oficial: la ronda y los alias ("Monza",
+    "Brazil") se resuelven con el calendario (OpenF1).
+    """
+    carreras = scraper.carreras(con, año)
+    if calendario.ronda_de(nombre) is None:
+        carrera = _por_nombre(carreras, str(nombre))
+        if carrera:
+            return carrera
+    entrada = calendario.resolver(año, nombre)
+    if entrada:
+        carrera = _por_nombre(carreras, entrada["carrera"])
+        if carrera:
+            return carrera
+        raise ValueError(f"'{entrada['carrera']}' ({año}) todavía no tiene documentos de la FIA.")
+    raise ValueError(f"No se pudo identificar la carrera '{nombre}' en {año}. "
+                     f"Opciones: {[c['name'] for c in carreras]}")
 
 
 def es_sancion(titulo: str) -> bool:
@@ -112,13 +135,24 @@ def listar_carreras(año: int) -> list[dict]:
     return [{"carrera": c["name"], "año": c["year"]} for c in scraper.carreras(conectar(), año)]
 
 
-def sanciones_piloto(año: int, carrera: str, numero_auto: int, nombre_piloto: str | None = None,
+def sanciones_piloto(año: int, carrera: str | int | None, numero_auto: int, nombre_piloto: str | None = None,
                      incluir_sin_sancion: bool = False) -> list[dict]:
-    """Sanciones de un auto/piloto en una carrera. Puede haber más de una."""
+    """Sanciones de un auto/piloto en una carrera, o en toda la temporada si `carrera` es None.
+
+    Puede haber más de una. La temporada completa va en orden cronológico; la primera vez
+    puede tardar, porque baja las decisiones de ese auto que no estén procesadas.
+    """
     con = conectar()
     auto_actualizar(con)
-    return _sanciones_del_piloto(con, _buscar_carrera(con, año, carrera), int(numero_auto),
-                                 nombre_piloto, incluir_sin_sancion)
+    if carrera is None or not str(carrera).strip():
+        carreras = list(reversed(scraper.carreras(con, año)))  # el índice va de la más nueva a la más vieja
+    else:
+        carreras = [_buscar_carrera(con, año, carrera)]
+    out = []
+    for c in carreras:
+        # dentro de una carrera los documentos vienen del más nuevo al más viejo
+        out += reversed(_sanciones_del_piloto(con, c, int(numero_auto), nombre_piloto, incluir_sin_sancion))
+    return out
 
 
 def sanciones_carrera(año: int, carrera: str, incluir_vueltas_borradas: bool = False,

@@ -96,8 +96,11 @@ def _texto_reglamento(año: int, cita: str | None) -> dict | None:
     """Párrafo exacto del reglamento para la cita (None si el RAG no está disponible)."""
     if not cita or store.motivo_no_disponible():
         return None
-    exactos = [r for r in store.buscar(cita, año=año, cita=cita, k=1, min_similitud=1.1)
-               if r.get("coincidencia") == "exacta"]
+    try:
+        encontrados = store.buscar(cita, año=año, cita=cita, k=1, min_similitud=1.1)
+    except Exception:  # noqa: BLE001 - sin el texto del artículo el informe sale igual, con la decisión
+        return None
+    exactos = [r for r in encontrados if r.get("coincidencia") == "exacta"]
     return exactos[0] if exactos else None
 
 
