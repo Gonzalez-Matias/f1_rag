@@ -7,8 +7,7 @@
   el proceso en orden (razonamiento del modelo y cada tool, con su fuente, argumentos y
   resultado en JSON). Afuera del bloque queda solo la respuesta final.
 - Informe: cuando el agente explica sanciones de una carrera, el informe (una ficha por
-  sanción) es parte de la respuesta: se ve en el chat, debajo del texto, y se descarga en
-  PDF o HTML. Los informes anteriores quedan en la barra lateral.
+  sanción) es la respuesta: se ve en el chat, sin texto antes, y se descarga en PDF o HTML. Los informes anteriores quedan en la barra lateral.
 - Mientras el agente responde no se puede enviar otro mensaje: hay un botón "Detener".
 
 Las conversaciones se guardan en data/conversaciones.sqlite (checkpointer de LangGraph):
@@ -450,12 +449,13 @@ for t, turno in enumerate(historial):
             recien = t == len(historial) - 1 and st.session_state.recien_respondida == st.session_state.thread_id
             with st.expander("Razonamiento", expanded=recien):
                 render_proceso(turno["proceso"])
+        generados = informes_del_turno(turno["proceso"])
         if turno["respuesta"] == conversaciones.INTERRUMPIDA:
             st.markdown(f'<p class="pw-interrumpida">{conversaciones.INTERRUMPIDA}</p>', unsafe_allow_html=True)
-        else:
+        elif not generados:
             st.markdown(turno["respuesta"])
-        generados = informes_del_turno(turno["proceso"])
-        # El informe es parte de la respuesta: las fichas van debajo del texto, con la descarga.
+        # Si hay informe, el informe es la respuesta: va solo, con la descarga, y no se muestra
+        # el texto del modelo (que en ese caso es apenas un "Informe listo.").
         for n, (ruta_html, ruta_pdf) in enumerate(generados):
             render_informe(ruta_html, ruta_pdf, clave=f"{st.session_state.thread_id}-{t}-{n}", en_chat=True)
         # Si el modelo explicó sanciones sin armar el informe (ej. varias carreras), se puede
@@ -490,6 +490,7 @@ if pregunta:
                       help="Corta la respuesta para poder preguntar otra cosa.")
 
     respuesta, texto_razon = "", ""
+    informe_listo = False  # ya se generó el informe: lo que escriba el modelo después no se muestra
     slot_razon = None    # placeholder del segmento de razonamiento en curso
     pendientes = {}      # tool_call_id -> (evento, placeholder)
 
@@ -510,7 +511,7 @@ if pregunta:
                     texto_razon += frag.razonamiento
                     with slot_razon.container():
                         render_razonamiento(texto_razon)
-                if frag.texto:
+                if frag.texto and not informe_listo:
                     respuesta += frag.texto
                     respuesta_box.markdown(respuesta + "▌")
                 continue
@@ -535,7 +536,9 @@ if pregunta:
                         with slot.container():
                             render_tool(ev)
                         slot_razon = None
-                        actividad.markdown('<p class="pw-actividad">Razonando…</p>', unsafe_allow_html=True)
+                        informe_listo = informe_listo or bool(informes_del_turno([ev]))
+                        actividad.markdown(f'<p class="pw-actividad">{"Mostrando el informe…" if informe_listo else "Razonando…"}</p>',
+                                           unsafe_allow_html=True)
     except Exception as exc:  # ej. 429 agotados los reintentos, clave inválida, servidor local apagado
         # El error puede haber dejado una tool sin resultado: se cierra el turno para poder seguir.
         conversaciones.cerrar_turno_interrumpido(agent, st.session_state.thread_id)
