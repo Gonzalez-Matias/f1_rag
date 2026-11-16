@@ -27,6 +27,8 @@ class LLMProvider(ABC):
     etiqueta: str            # nombre para mostrar en la UI
     env_api_key: str | None  # variable de entorno con la clave (None: no necesita clave)
     modelo_default: str
+    modelos_fallback: tuple[str, ...] = ()
+    models_url: str | None = None
     local: bool = False      # corre en la máquina del usuario (Ollama, LM Studio)
     env_base_url: str | None = None
     base_url_default: str | None = None

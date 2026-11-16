@@ -8,6 +8,14 @@ class GeminiProvider(LLMProvider):
     etiqueta = "Google Gemini"
     env_api_key = "GOOGLE_API_KEY"
     modelo_default = "gemini-2.5-flash"
+    models_url = "https://generativelanguage.googleapis.com/v1beta/models"
+    modelos_fallback = (
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-3.8-flash",
+        "gemini-3.8-pro",
+        "gemini-4-argon",
+    )
 
     def crear_chat_model(self):
         from langchain_google_genai import ChatGoogleGenerativeAI
@@ -25,6 +33,15 @@ class OpenAIProvider(LLMProvider):
     etiqueta = "OpenAI (ChatGPT)"
     env_api_key = "OPENAI_API_KEY"
     modelo_default = "gpt-5-mini"
+    models_url = "https://api.openai.com/v1/models"
+    modelos_fallback = (
+        "gpt-5-mini",
+        "gpt-5",
+        "gpt-6.1-astra",
+        "gpt-6.1-terra",
+        "gpt-6.1-sol",
+        "o3-mini",
+    )
 
     def crear_chat_model(self):
         from langchain_openai import ChatOpenAI
@@ -42,6 +59,11 @@ class DeepSeekProvider(LLMProvider):
     # deepseek-reasoner soporta tool calling y devuelve razonamiento (verificado 2026-11-07).
     # deepseek-chat también anda con tools, pero no razona.
     modelo_default = "deepseek-reasoner"
+    models_url = "https://api.deepseek.com/models"
+    modelos_fallback = (
+        "deepseek-reasoner",
+        "deepseek-chat",
+    )
 
     def crear_chat_model(self):
         from langchain_deepseek import ChatDeepSeek
@@ -53,6 +75,13 @@ class AnthropicProvider(LLMProvider):
     etiqueta = "Anthropic (Claude)"
     env_api_key = "ANTHROPIC_API_KEY"
     modelo_default = "claude-sonnet-5-5"
+    models_url = "https://api.anthropic.com/v1/models"
+    modelos_fallback = (
+        "claude-sonnet-5-5",
+        "claude-haiku-5-5",
+        "claude-opus-5-5",
+        "claude-3-5-sonnet-latest",
+    )
 
     def crear_chat_model(self):
         from langchain_anthropic import ChatAnthropic
@@ -73,6 +102,11 @@ class OllamaProvider(LLMProvider):
     modelo_default = "qwen3:8b"
     env_base_url = "OLLAMA_BASE_URL"
     base_url_default = "http://localhost:11434"
+    modelos_fallback = (
+        "qwen3:8b",
+        "llama3.1",
+        "mistral-nemo",
+    )
 
     def crear_chat_model(self):
         from langchain_ollama import ChatOllama
@@ -90,6 +124,9 @@ class LMStudioProvider(LLMProvider):
     modelo_default = "qwen3-8b"
     env_base_url = "LMSTUDIO_BASE_URL"
     base_url_default = "http://localhost:1234/v1"
+    modelos_fallback = (
+        "qwen3-8b",
+    )
 
     def crear_chat_model(self):
         from langchain_openai import ChatOpenAI

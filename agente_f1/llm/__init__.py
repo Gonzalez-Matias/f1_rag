@@ -8,6 +8,7 @@
 """
 from .. import config
 from .base import Fragmento, LLMProvider
+from .discovery import listar_modelos_proveedor
 from .providers import PROVEEDORES
 
 
@@ -23,4 +24,4 @@ def get_provider(nombre: str | None = None, modelo: str | None = None, api_key: 
                                max_retries=config.LLM_MAX_RETRIES, api_key=api_key, base_url=base_url)
 
 
-__all__ = ["Fragmento", "LLMProvider", "PROVEEDORES", "get_provider"]
+__all__ = ["Fragmento", "LLMProvider", "PROVEEDORES", "get_provider", "listar_modelos_proveedor"]

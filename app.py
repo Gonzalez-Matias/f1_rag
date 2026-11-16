@@ -21,7 +21,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from agente_f1 import config, conversaciones
 from agente_f1.agent import build_agent
-from agente_f1.llm import PROVEEDORES, get_provider
+from agente_f1.llm import PROVEEDORES, get_provider, listar_modelos_proveedor
 from agente_f1.util import parse_json
 
 st.set_page_config(page_title="Pit Wall Agent", layout="wide")
@@ -107,6 +107,11 @@ def provider_actual():
                         base_url=cfg["base_url"] or None)
 
 
+@st.cache_data(show_spinner=False, ttl=120)
+def _descubrir_modelos(proveedor: str, api_key: str, base_url: str) -> dict:
+    return listar_modelos_proveedor(proveedor, api_key=api_key or None, base_url=base_url or None)
+
+
 def agente_de_la_sesion(provider):
     """El agente se arma por sesión: puede llevar la clave del usuario, que no se comparte
     con otras sesiones ni se guarda. Todas comparten el checkpointer (las conversaciones)."""
@@ -159,8 +164,6 @@ with h2:
             format_func=lambda n: PROVEEDORES[n].etiqueta, disabled=actual is not None,
             help="Una conversación guardada sigue con su proveedor; para cambiarlo, empezá una nueva.")
         clase = PROVEEDORES[elegido]
-        modelo = st.text_input("Modelo", value=cfg["modelo"] if elegido == cfg["proveedor"] else "",
-                               placeholder=clase.modelo_default, help="Vacío = el modelo por defecto.")
         clave, base_url = "", ""
         if clase.env_api_key:
             en_env = bool(get_provider(elegido).api_key)
@@ -169,11 +172,39 @@ with h2:
                 placeholder="usando la del .env" if en_env else "pegá tu clave",
                 help="Se usa solo en esta sesión del navegador: no se guarda en disco ni se comparte.")
         else:
-            base_url = st.text_input("URL del servidor local", value=cfg["base_url"] if elegido == cfg["proveedor"] else "",
-                                     placeholder=clase.base_url_default)
+            base_url = st.text_input(
+                "URL del servidor local",
+                value=cfg["base_url"] if (elegido == cfg["proveedor"] and cfg["base_url"]) else (clase.base_url_default or ""),
+                placeholder=clase.base_url_default,
+            )
             st.caption("El modelo tiene que soportar tool calling (ej. qwen3, llama3.1).")
+
+        clave_efectiva = clave.strip() or (get_provider(elegido).api_key if clase.env_api_key else "")
+        catalogo = _descubrir_modelos(elegido, clave_efectiva, base_url.strip())
+        modelos_disponibles = catalogo.get("modelos") or [clase.modelo_default]
+
+        modelo_actual = cfg["modelo"] if (elegido == cfg["proveedor"] and cfg["modelo"]) else clase.modelo_default
+        idx_modelo = (
+            modelos_disponibles.index(modelo_actual)
+            if modelo_actual in modelos_disponibles
+            else 0
+        )
+        modelo_sel = st.selectbox("Modelo", modelos_disponibles, index=idx_modelo)
+        if catalogo.get("fuente") == "api_en_vivo":
+            st.caption(f"{len(modelos_disponibles)} modelos activos detectados en la API.")
+        else:
+            st.caption("Catálogo base · Ingresá tu clave de API para listar los modelos de tu cuenta.")
+
+        modelo_custom = st.text_input(
+            "Otro modelo (personalizado)",
+            value="" if modelo_actual in modelos_disponibles else modelo_actual,
+            placeholder="Opcional: ej. modelo específico o custom",
+            help="Permite ingresar cualquier identificador de modelo que no figure en la lista.",
+        )
+        modelo_final = modelo_custom.strip() if modelo_custom.strip() else modelo_sel
+
         if st.button("Usar este modelo", type="primary", use_container_width=True):
-            st.session_state.modelo = {"proveedor": elegido, "modelo": modelo.strip(), "base_url": base_url.strip()}
+            st.session_state.modelo = {"proveedor": elegido, "modelo": modelo_final, "base_url": base_url.strip()}
             if clave.strip():
                 st.session_state.claves[elegido] = clave.strip()
             st.rerun()
