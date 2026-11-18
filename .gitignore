@@ -4,7 +4,8 @@ __pycache__/
 *.pyc
 
 # Datos generados (se reproducen con los scripts)
-data/fia_cache.sqlite*
+# data/fia_cache.sqlite se commitea: armarlo desde cero tarda ~35 min
+data/fia_cache.sqlite-*
 data/conversaciones.sqlite*
 informes/*
 !informes/.gitkeep
