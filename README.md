@@ -1,210 +1,169 @@
-# Agente de sanciones de F1
+<p align="center">
+  <img src="static/logo.png" alt="Pit Wall Agent" width="340">
+</p>
 
-Agente de IA que **explica sanciones de Fórmula 1 con el reglamento en la mano**: busca la
-decisión oficial de los comisarios de la FIA, trae el texto de los artículos infringidos del
-reglamento vigente en esa temporada, explica por qué se aplicó la sanción y genera un informe.
+<p align="center"><strong>Las sanciones de la Fórmula 1, explicadas con el reglamento en la mano.</strong></p>
 
-Trabajo Integrador · Modelos de Lenguaje · UTN FRM · 2026
+En la transmisión ves "Bearman, reprimenda" o "+5 s", pero el porqué queda afuera. La decisión está en un PDF de los comisarios en fia.com, en inglés y con jerga legal, y cita un artículo de un reglamento de cientos de páginas que cambia cada temporada.
 
-## Ejemplo de tarea
+**Pit Wall Agent** resuelve eso en una pregunta. Busca qué se anunció en pista y qué decidieron los comisarios, trae el artículo exacto del reglamento de esa temporada y lo explica en simple, en un informe que se lee en el chat y se descarga en PDF.
 
-> "¿Por qué sancionaron a Bearman en São Paulo 2026? Armame un informe."
+## Qué le podés preguntar
 
-1. `sanciones_de_piloto_completo("Bearman", 2026, "São Paulo")` → auto 87, TGR Haas F1 Team (OpenF1); reprimenda, Art. B1.6.3b (FIA); secuencia en Race Control (OpenF1)
-2. `buscar_en_reglamento("reversing in the pit lane", 2026, "B1.6.3b")` → texto del artículo (RAG)
-3. `generar_informe(...)` → `informes/2026...-gran-premio-de-sao-paulo-2026.pdf` (y `.html`), descargables desde el chat
+| Pregunta | Qué devuelve |
+|---|---|
+| ¿Por qué sancionaron a Bearman en São Paulo 2026? | Todas sus sanciones de esa carrera, con la regla aplicada |
+| ¿Cuál fue la última sanción de Hamilton? | Todas las suyas en la última carrera en la que lo sancionaron |
+| ¿Quiénes fueron sancionados en la quinta carrera de 2025? | La carrera completa, identificada por número de ronda |
+| ¿Qué sanciones hubo en Monza 2024? | La carrera, encontrada por lugar, país o circuito |
+| ¿Por qué no sancionaron a Norris en esa carrera? | Las investigaciones que terminaron sin sanción |
+| ¿Y en qué sesión fue? | Sigue la conversación: recuerda lo anterior |
 
-## Arquitectura
+La respuesta es un informe con un resumen de la carrera y una ficha por sanción: qué pasó, qué dice la regla, por qué correspondió esa sanción, el link al documento oficial y un glosario para quien recién empieza a seguir la F1.
+
+## Cómo funciona
 
 ```mermaid
 flowchart LR
-    U[Usuario] <--> UI[Streamlit<br/>chat + flujo en vivo]
-    UI <--> A[Agente<br/>create_agent + checkpointer<br/>+ ToolCallLimitMiddleware]
-    A <--> LLM[LLM vía adaptador<br/>Gemini / OpenAI / DeepSeek / Claude<br/>Ollama / LM Studio]
-    A <--> CK[(Checkpointer SQLite<br/>conversaciones)]
-    A -- MCP stdio --> S[Servidor MCP propio f1-data]
-    S --> T1[openf1_calendario<br/>openf1_buscar_piloto<br/>openf1_mensajes_race_control<br/>openf1_sanciones_en_pista]
-    S --> T2[fia_decisiones_de_piloto<br/>fia_decisiones_de_carrera]
-    S --> T5[sanciones_de_piloto_completo<br/>sanciones_de_carrera_completo<br/>ultimas_sanciones_de_piloto_completo] --> T1 & T2
-    A --> T3[buscar_en_reglamento]
-    A --> T4[generar_informe]
-    T1 --> OF[(OpenF1 API)]
-    T2 --> FC[(Índice FIA<br/>SQLite)] --> FIA[(fia.com PDFs)]
-    T3 --> CH[(Chroma coseno<br/>reglamentos + glosario)]
-    T4 --> MD[informes/*.pdf, *.html]
-    OTRO[Otros clientes MCP<br/>Claude Desktop, Claude Code] -. MCP .-> S
+    U["<b>Usuario</b><br/>Streamlit · chat"] <--> A["<b>Agente</b><br/>create_agent<br/>memoria SQLite<br/>ToolCallLimit"]
+    A <--> L["<b>LLM a elección</b><br/>Gemini, OpenAI, DeepSeek,<br/>Claude, Ollama, LM Studio"]
+
+    A --> M["<b>MCP f1-data</b><br/>9 tools openf1_*, fia_*<br/>y consultas conjuntas"]
+    A --> R["<b>buscar_en_reglamento</b><br/>RAG por inciso"]
+    A --> I["<b>generar_informe</b><br/>una plantilla HTML"]
+
+    M --> D["<b>OpenF1 + FIA</b><br/>Race Control · decisiones<br/>índice SQLite"]
+    R --> C["<b>Chroma</b><br/>similitud del coseno"]
+    I --> O["<b>Chat, PDF y HTML</b><br/>informes/"]
+
+    classDef tool stroke:#d92d23,stroke-width:2px
+    class A,M,R,I tool
 ```
 
-| Componente | Dónde | Por qué está |
+Así se resuelve "¿Por qué sancionaron a Bearman en São Paulo 2026?":
+
+1. **`sanciones_de_piloto_completo`** identifica al piloto (auto 87, Haas), trae las decisiones de la FIA y las cruza con lo anunciado por Race Control.
+2. **`buscar_en_reglamento`** recupera cada artículo citado, por ejemplo el B1.6.3b: *"At no time may an F1 Car be reversed in the Pit Lane under its own power."*
+3. **`generar_informe`** arma el informe. El modelo escribe la explicación; la sanción, el artículo, la fecha y los links salen de las fuentes.
+
+Mientras trabaja, la interfaz muestra en vivo el razonamiento del modelo y cada tool, con su fuente, argumentos y resultado. La respuesta se puede detener en cualquier momento.
+
+### Una regla de diseño: el dato oficial no pasa por el modelo
+
+El modelo decide qué consultar y explica en lenguaje simple, pero no copia datos oficiales. Al generar el informe, la decisión, el artículo, la fecha, el link y el texto del reglamento se completan directamente desde las fuentes. Así un error del modelo no puede cambiar una sanción ni inventar un artículo.
+
+## De dónde sale cada dato
+
+| Fuente | Qué aporta | Cómo se usa |
 |---|---|---|
-| Agente (`create_agent`) | `agente_f1/agent.py` | Orquesta el flujo de varios pasos con tool calling |
-| Memoria (checkpointer SQLite) | `agente_f1/conversaciones.py` | Cada conversación es un `thread_id` guardado en `data/conversaciones.sqlite`: el agente sigue sobre turnos anteriores ("¿y en qué sesión fue?") y las conversaciones sobreviven a reinicios. La UI reconstruye el historial desde esos mismos mensajes |
-| Adaptador de LLM | `agente_f1/llm/` | "Traé tu propio modelo": misma interfaz para Gemini, OpenAI, DeepSeek, Claude y modelos locales (Ollama, LM Studio); normaliza el razonamiento para la UI |
-| "Traé tu propia clave" | `app.py` (selector "Modelo") | El usuario elige proveedor y modelo y carga su clave; queda solo en la sesión del navegador (no se guarda en disco ni se comparte entre sesiones). Si no la carga, se usa la del `.env` |
-| Servidor MCP propio `f1-data` | `agente_f1/mcp_f1/` | Expone las 9 tools de datos de F1 por MCP, con la fuente en el nombre (`openf1_*`, `fia_*`) y tres consultas conjuntas (`sanciones_de_piloto_completo`, `sanciones_de_carrera_completo`, `ultimas_sanciones_de_piloto_completo`) que cruzan las decisiones de la FIA con las sanciones anunciadas por Race Control: el agente las usa como cualquier cliente, y el mismo servidor se puede conectar a Claude Desktop, Claude Code u otro cliente MCP |
-| Fuente FIA | `agente_f1/fuentes/fia/` | La decisión oficial (motivo, artículos) solo está en los PDFs de la FIA. Índice local en SQLite; solo se bajan los PDFs que se necesitan |
-| Fuente OpenF1 | `agente_f1/fuentes/openf1.py` | Nombre → número de auto; calendario (ronda, lugar, fechas); sanciones anunciadas y secuencia de Race Control; detectar carreras nuevas para actualizar el índice |
-| RAG del reglamento | `agente_f1/rag/` | El texto del reglamento por año no está en el modelo. Corpus de 10 documentos (reglamento deportivo, Código Deportivo Internacional y su Apéndice L de 2024, 2025 y 2026, y un glosario propio). Párrafos por inciso + similitud del coseno; se cita el inciso exacto (ej. B1.6.3b) |
-| Glosario propio | `data/reglamento/glosario.md` | Contenido del grupo: ~40 términos explicados para un fan nuevo, con su nombre en inglés. Entra al RAG como un documento más y lo usa el agente para explicar en simple |
-| Informe (PDF y HTML) | `agente_f1/informe/` | Resultado tangible: portada, resumen tipo torre de tiempos y una ficha por sanción con la regla aplicada y glosario. El modelo escribe solo los textos en simple; la decisión, el artículo, la fecha, el link y el texto del reglamento salen de las fuentes |
-| Middleware: `ToolCallLimitMiddleware` (LangChain) | `agente_f1/agent.py` | Único middleware. Limita a 12 búsquedas en el reglamento y 30 llamadas a tools por pregunta (una carrera entera puede tener muchas sanciones). Un modelo de razonamiento llegó a hacer ~30 búsquedas seguidas de un artículo que no estaba en el corpus; el prompt lo desalienta pero no lo garantiza, y el middleware corta donde el grafo ejecuta la tool, sin depender del modelo. No se resolvió con código propio porque haría falta contar llamadas por ejecución dentro del grafo, que es justo lo que este middleware ya hace |
-| UI | `app.py`, `.streamlit/config.toml` | Tema claro con el logo (`static/logo.png`), Barlow / Barlow Condensed / JetBrains Mono y el rojo del logo como acento. Barra lateral con las conversaciones (cada una con un menú de tres puntos para eliminarla) y, debajo de la abierta, sus informes. Chat en markdown con un bloque desplegable "Razonamiento" que muestra en vivo el razonamiento y cada tool, con su fuente (FIA, OpenF1, Reglamento), argumentos y resultado en JSON. Mientras el agente responde no se puede enviar otro mensaje: el botón **Detener** corta la respuesta y deja la conversación lista para seguir (`conversaciones.cerrar_turno_interrumpido`) |
-| Informe como parte de la respuesta | `app.py`, `agente_f1/informe/render.py`, `agente_f1/agent.py` | Cuando el agente explica sanciones de una carrera arma siempre el informe (el prompt se lo pide) y el informe es la respuesta: no hay texto antes. La UI muestra el informe dentro de la conversación, con los colores de la app (`render.vista_previa(modo="chat")`, misma plantilla y mismos datos que el PDF), y debajo las descargas en PDF y HTML. Los informes de una conversación quedan como subsección suya en la barra lateral. Si una respuesta explicó sanciones sin informe (ej. varias carreras), aparece el botón "Generar informe en PDF" |
+| **Decisiones de la FIA** | Hecho, infracción, artículos, sanción y motivo | Índice local de los documentos; cada PDF se lee una sola vez y queda en caché |
+| **Race Control (OpenF1)** | Lo anunciado durante las sesiones: sanción, vuelta, si se cumplió, investigaciones y banderas | API pública, consultada en el momento |
+| **OpenF1** | Pilotos, números de auto, equipos y calendario | Resuelve "Bearman", "la quinta carrera" o "Monza" |
+| **Reglamentos de la FIA** | Texto vigente de cada temporada | Base vectorial con 3.651 párrafos |
+| **Glosario propio** | 40 términos explicados para fans | Entra a la misma base que los reglamentos |
 
-TODO (grupo): completar la justificación de cada componente para la defensa.
+Las dos fuentes de sanciones se complementan. Race Control suele ser lo primero que aparece y da el momento exacto; la FIA da la explicación oficial, además de decisiones que no se anuncian en pista. Cada anuncio se cruza con su documento para no contar dos veces la misma sanción, y si todavía no hay documento, se muestra igual y queda marcado.
 
-## Instalación
+## Las piezas
 
-Requisitos: Python 3.11+ y `pdftotext` (poppler).
+### Servidor MCP `f1-data`
 
-```bash
-# pdftotext (leer PDFs) y Pango (WeasyPrint, para generar el informe en PDF):
-# Linux: sudo apt install poppler-utils libpango-1.0-0 libpangoft2-1.0-0
-# Streamlit Community Cloud: se instalan solas desde packages.txt
-# macOS: brew install poppler pango
-# Windows: conda install -c conda-forge poppler  (y para el PDF del informe, GTK3 runtime:
-#          https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#windows).
-#          Sin Pango el informe se genera igual en HTML, que se imprime a PDF desde el navegador.
+Los datos de F1 viven en un servidor [MCP](https://modelcontextprotocol.io) propio, separado del agente. El nombre de cada tool dice de qué fuente sale el dato, y el mismo servidor se puede usar desde otros clientes, como Claude Desktop o Claude Code.
 
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-## Configuración
-
-```bash
-cp .env.example .env
-```
-
-Completar en `.env` (no se commitea):
-- `GOOGLE_API_KEY`: **obligatoria** (embeddings del reglamento, y Gemini si se usa como chat).
-- `LLM_PROVIDER`: `gemini`, `openai`, `deepseek`, `anthropic`, `ollama` o `lmstudio` (por defecto).
-
-Las claves de los proveedores de chat son opcionales en el `.env`: desde la UI (botón **Modelo**,
-arriba a la derecha) se elige proveedor y modelo y se carga la clave solo para esa sesión.
-
-**Modelos locales.** Con [Ollama](https://ollama.com) (`ollama pull qwen3:8b`) o
-[LM Studio](https://lmstudio.ai) (servidor local activado) no hace falta clave: se elige
-"Local · Ollama" o "Local · LM Studio" en la UI. El modelo tiene que soportar tool calling.
-
-### Razonamiento por proveedor
-
-| Proveedor | Cómo se obtiene | Se muestra en la UI |
+| Tool | Fuente | Para qué |
 |---|---|---|
-| Gemini | `include_thoughts=True` (resumen del razonamiento) | Sí |
-| OpenAI | Responses API, `reasoning.summary="auto"` (modelos de razonamiento) | Sí |
-| Anthropic | Extended thinking (`thinking.budget_tokens`) | Sí |
-| DeepSeek | `reasoning_content` (solo `deepseek-reasoner`) | Sí con reasoner; `deepseek-chat` no razona |
-| Ollama | `reasoning=True` (modelos con razonamiento, ej. qwen3) | Sí |
-| LM Studio | API compatible con OpenAI: no devuelve el razonamiento | No (solo las tools) |
+| `sanciones_de_piloto_completo` | OpenF1 + FIA | Un piloto en una carrera |
+| `sanciones_de_carrera_completo` | OpenF1 + FIA | Todas las sanciones de una carrera |
+| `ultimas_sanciones_de_piloto_completo` | OpenF1 + FIA | La última carrera en la que sancionaron a un piloto |
+| `fia_decisiones_de_piloto` | FIA | Decisiones de un piloto, en una carrera o en la temporada |
+| `fia_decisiones_de_carrera` | FIA | Decisiones oficiales de una carrera |
+| `openf1_sanciones_en_pista` | OpenF1 | Sanciones anunciadas por Race Control |
+| `openf1_mensajes_race_control` | OpenF1 | Secuencia de un incidente |
+| `openf1_buscar_piloto` | OpenF1 | Nombre a número de auto y equipo |
+| `openf1_calendario` | OpenF1 | Rondas, lugares y fechas de una temporada |
 
-TODO: verificar cada proveedor con el modelo final elegido.
+El agente suma dos tools propias: `buscar_en_reglamento` y `generar_informe`.
 
-## Datos
+### RAG del reglamento
 
-### 1. Índice de documentos de la FIA
+Los comisarios citan incisos ("Breach of Article B1.6.3b"), así que **cada párrafo indexado es un inciso**. Como un inciso suelto tiene poco contexto, antes del embedding se le antepone su cita y el título del artículo:
 
-El repo ya incluye el índice en `data/fia_cache.sqlite`: título y URL de cada documento, más las
-decisiones ya procesadas. No hace falta generarlo para usar la app.
-
-Los PDFs que faltan se bajan cuando el agente los necesita y quedan en el caché. Antes de cada
-consulta se pregunta a OpenF1 si hubo sesiones desde la última sincronización y, si hubo, se
-actualiza solo esa carrera (1 pedido a la FIA).
-
-Para regenerarlo desde cero:
-
-```bash
-rm data/fia_cache.sqlite
-python scripts/indexar_fia.py        # ~35 min (respeta el Crawl-delay de 10 s de fia.com)
-```
-
-Como la app actualiza este archivo al usarse, para que git no lo muestre como modificado:
-
-```bash
-git update-index --skip-worktree data/fia_cache.sqlite
-```
-
-### 2. Corpus del RAG
-
-| Archivo en `data/reglamento/` | Documento | Descarga |
-|---|---|---|
-| `2026_f1_regulations_section_b_sporting_iss09.pdf` | 2026 Formula 1 Regulations – Section B [Sporting], Issue 09 | [fia.com › Formula One](https://www.fia.com/regulation/category/110) |
-| `2025_f1_sporting_regulations_iss05.pdf` | 2025 Formula 1 Sporting Regulations, Issue 5 | ídem |
-| `2026_international_sporting_code.pdf` | Código Deportivo Internacional 2026 (se usan los artículos 11 a 15: oficiales, infracciones y penalizaciones, protestas, revisión, apelaciones) | [fia.com › International Sporting Code](https://www.fia.com/regulation/category/123) |
-| `2025_international_sporting_code.pdf` | Código Deportivo Internacional 2025 | ídem |
-| `2026_isc_appendix_l.pdf` | Apéndice L 2026 (se usa el Capítulo IV, código de conducción) | ídem |
-| `2025_isc_appendix_l.pdf` | Apéndice L 2025 | ídem |
-| `2024_f1_sporting_regulations_iss07.pdf` | 2024 Formula 1 Sporting Regulations, Issue 7 | [fia.com › Formula One](https://www.fia.com/regulation/category/110) |
-| `2024_international_sporting_code.pdf` | Código Deportivo Internacional 2024 | [fia.com › International Sporting Code](https://www.fia.com/regulation/category/123) |
-| `2024_isc_appendix_l.pdf` | Apéndice L 2024 | ídem |
-| `glosario.md` | Glosario propio del grupo (está en el repo) | — |
-
-Los PDFs no se suben al repo: se descargan de los links y se guardan con esos nombres
-(el año adelante define la temporada). Después:
-
-```bash
-python scripts/ingestar_reglamento.py              # agrega lo que falta
-python scripts/ingestar_reglamento.py --max 800    # como mucho 800 párrafos en esta corrida
-python scripts/ingestar_reglamento.py --desde-cero # borra la base y carga todo
-```
-
-El corpus completo son ~2.400 párrafos. El tier gratuito de `gemini-embedding-001` permite
-**100 embeddings por minuto y 1.000 por día**, compartidos con las búsquedas del agente (1 por
-búsqueda). Por eso la ingesta:
-- va en lotes de 50 cada 31 s;
-- es incremental y se puede cortar y retomar: cada párrafo tiene un id fijo y solo se
-  calculan los embeddings que faltan;
-- carga primero lo más usado (glosario, Apéndice L, reglamento 2026) y lo más grande al final;
-- si llega al límite diario se detiene sin error: se vuelve a correr al día siguiente.
-
-Con una sola clave gratuita, el corpus completo se carga en 3 días. Conviene usar `--max`
-para dejar cupo a las búsquedas (por ejemplo `--max 800` deja ~200 búsquedas ese día).
-
-**Formatos.** Se detectan por el contenido:
-- Reglamento de F1: artículos `B1.6.3` / `48.1`, incisos `a.` / `a)`.
-- Código Deportivo Internacional: el PDF es bilingüe en dos columnas; se extrae solo la de
-  inglés. Artículos `12.2.1.i`.
-- Apéndice L: también bilingüe; se toma solo el Capítulo IV (código de conducción en pista),
-  que es el que citan los comisarios ("Appendix L Chapter IV Article 2 d)").
-- Glosario: cada `## Término` es un párrafo, válido para todas las temporadas.
-
-**Chunking por párrafo.** Cada párrafo es un inciso de un artículo (`B1.6.3b`), con sus
-sub-incisos (`i.`, `ii.`) adentro; el texto de un artículo sin incisos se corta en las líneas
-vacías. Es la granularidad con la que citan los comisarios ("Breach of Article B1.6.3b").
-Antes de calcular el embedding se le antepone la cita y el título del artículo, porque un
-inciso suelto tiene poco contexto:
-
-```
+```text
 B1.6.3b · Driving in the Pit Entry Road, Pit Lane And Pit Exit Road
 At no time may an F1 Car be reversed in the Pit Lane under its own power.
 ```
 
-Limpieza: se sacan encabezados y pies de página (líneas que se repiten en muchas páginas) y
-los párrafos de más de `RAG_MAX_CHARS_PARRAFO` caracteres se parten por oraciones. Con la
-Sección B 2026 salen ~650 párrafos de ~290 caracteres de mediana.
+La búsqueda tiene dos pasos, siempre dentro de la temporada de la sanción:
 
-**Búsqueda por similitud del coseno.** La colección de Chroma se crea con
-`"hnsw:space": "cosine"` (por defecto Chroma usa distancia L2); la similitud es
-`1 − distancia`. La tool `buscar_en_reglamento`:
-1. si la decisión cita un artículo (`B1.6.3b`), trae ese párrafo exacto por metadata;
-2. completa con los `RAG_TOP_K` párrafos más parecidos del mismo año con similitud
-   ≥ `RAG_MIN_SIMILITUD`.
+1. Si hay un artículo citado, trae ese inciso exacto por metadatos.
+2. Completa con los párrafos más parecidos por similitud del coseno, con un mínimo de 0,63. Con `gemini-embedding-001`, las consultas relevantes dieron entre 0,66 y 0,83, y las no relacionadas hasta 0,62.
 
-Cada resultado trae `cita`, el nombre del `reglamento`, `similitud` y el texto (~300
-caracteres), así lo recuperado ocupa poco contexto y la respuesta puede citar documento + inciso.
-La similitud también busca en el glosario, que no tiene año.
+Cada formato se detecta por su contenido. De los PDF bilingües del Código Deportivo y del Apéndice L se extrae solo la columna en inglés.
 
-## Ejecución
+### Informe
+
+Una sola plantilla (`agente_f1/informe/plantilla.html`, con Jinja2 y CSS) genera las tres salidas: la vista dentro del chat, el HTML descargable y el PDF con WeasyPrint. Si WeasyPrint no puede ejecutarse, el informe sigue disponible en HTML.
+
+### Memoria y conversaciones
+
+Cada conversación se guarda con el checkpointer de LangGraph en SQLite. Sobrevive a reinicios, permite preguntas de seguimiento y conserva sus informes, que aparecen debajo de ella en la barra lateral.
+
+### Modelos
+
+El proveedor y el modelo se eligen desde la interfaz. Cada usuario puede cargar su propia clave, que queda solo en la sesión del navegador. El razonamiento se muestra cuando el proveedor lo devuelve:
+
+| Proveedor | Razonamiento en la interfaz |
+|---|---|
+| Gemini | Sí, resumen del razonamiento |
+| OpenAI | Sí, en modelos de razonamiento |
+| Anthropic | Sí, con extended thinking |
+| DeepSeek | Sí con `deepseek-reasoner` |
+| Ollama | Sí, en modelos con razonamiento como `qwen3` |
+| LM Studio | No: se ven las tools |
+
+### Límite de llamadas
+
+`ToolCallLimitMiddleware` de LangChain, el único middleware, permite hasta 12 búsquedas en el reglamento y 30 llamadas a tools por pregunta. Existe porque un modelo llegó a buscar unas 30 veces seguidas un artículo que no estaba cargado. El prompt lo desalienta pero no lo garantiza; el límite actúa dentro del grafo, y al superarlo el modelo responde con lo que ya tiene. Se usa el de LangChain porque contar llamadas por ejecución es justo lo que ya resuelve.
+
+## Puesta en marcha
+
+Requiere Python 3.11 o superior, `pdftotext` (poppler) y Pango.
 
 ```bash
+# Linux
+sudo apt install poppler-utils libpango-1.0-0 libpangoft2-1.0-0
+# macOS
+brew install poppler pango
+
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
+cp .env.example .env               # completar GOOGLE_API_KEY
 streamlit run app.py
 ```
 
-### Servidor MCP f1-data en otros clientes
+En Windows, `pdftotext` se instala con `conda install -c conda-forge poppler`. Para el PDF hace falta el [runtime de GTK3](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#windows); sin él, el informe se genera en HTML.
 
-El agente lo lanza solo. Para usarlo desde Claude Desktop o Claude Code, agregarlo a su
-configuración de servidores MCP (rutas absolutas a este proyecto):
+El repositorio ya incluye el índice de la FIA y la base del reglamento, así que no hace falta generar datos para empezar.
+
+| Variable | Uso |
+|---|---|
+| `GOOGLE_API_KEY` | **Obligatoria.** Embeddings del reglamento, y chat si se usa Gemini |
+| `LLM_PROVIDER` | `gemini`, `openai`, `deepseek`, `anthropic`, `ollama` o `lmstudio` |
+| `LLM_MODEL` | Opcional; vacío usa el modelo por defecto del proveedor |
+| `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY` | Opcionales; también se pueden cargar en la interfaz |
+
+Con [Ollama](https://ollama.com) o [LM Studio](https://lmstudio.ai) no hace falta clave de chat, pero el modelo tiene que soportar tool calling. Por ejemplo: `ollama pull qwen3:8b`.
+
+### Streamlit Community Cloud
+
+1. Crear la app apuntando a este repositorio, rama `main`, archivo `app.py`, con Python 3.12.
+2. Cargar `GOOGLE_API_KEY` y `LLM_PROVIDER` en **Secrets**, en formato TOML.
+
+Las dependencias del sistema se instalan desde `packages.txt`. El disco es temporal: las conversaciones, los informes y lo agregado al caché se pierden al reiniciar. Si la app es pública, cualquiera que la use consume las claves cargadas.
+
+### Usar el servidor MCP en otro cliente
 
 ```json
 {
@@ -218,63 +177,59 @@ configuración de servidores MCP (rutas absolutas a este proyecto):
 }
 ```
 
-Tests (sin red ni API keys; usan texto de PDFs reales en `tests/fixtures/`):
+## Actualizar los datos
+
+**Documentos de la FIA.** Se actualizan solos: antes de cada consulta se revisa en OpenF1 si hubo sesiones nuevas y se refresca esa carrera. Para reconstruir el índice desde cero (unos 35 minutos, respetando los 10 segundos entre pedidos que pide fia.com):
 
 ```bash
-python -m pytest
+rm data/fia_cache.sqlite
+python scripts/indexar_fia.py
 ```
 
-## Estructura
+**Reglamentos.** Los PDF no están en el repositorio. Para regenerar la base, descargarlos en `data/reglamento/` con estos nombres; el año del nombre define la temporada.
 
+| Archivos | Documento | Descarga |
+|---|---|---|
+| `2026_f1_regulations_section_b_sporting_iss09.pdf`, `2025_f1_sporting_regulations_iss05.pdf`, `2024_f1_sporting_regulations_iss07.pdf` | Reglamento Deportivo de F1 | [fia.com](https://www.fia.com/regulation/category/110) |
+| `2026_international_sporting_code.pdf`, `2025_international_sporting_code.pdf`, `2024_international_sporting_code.pdf` | Código Deportivo Internacional | [fia.com](https://www.fia.com/regulation/category/123) |
+| `2026_isc_appendix_l.pdf`, `2025_isc_appendix_l.pdf`, `2024_isc_appendix_l.pdf` | Apéndice L, capítulo IV | [fia.com](https://www.fia.com/regulation/category/123) |
+
+```bash
+python scripts/ingestar_reglamento.py              # agrega lo que falta
+python scripts/ingestar_reglamento.py --max 800    # limita los párrafos de esta corrida
+python scripts/ingestar_reglamento.py --desde-cero # borra la base y carga todo
 ```
-app.py                      UI (Streamlit)
+
+El plan gratuito de `gemini-embedding-001` permite 100 embeddings por minuto y 1.000 por día, compartidos con las búsquedas del agente. La ingesta va en lotes y retoma donde quedó: con una sola clave gratuita, la base completa lleva cuatro días.
+
+## Estructura del proyecto
+
+```text
+app.py                  interfaz de chat (Streamlit)
 agente_f1/
-  agent.py                  create_agent + system prompt
-  config.py                 .env y rutas
-  conversaciones.py         conversaciones guardadas (checkpointer SQLite)
-  util.py                   helpers compartidos
-  llm/                      adaptadores de LLM: base.py (interfaz), providers.py (Gemini, OpenAI, DeepSeek, Claude, Ollama, LM Studio)
-  mcp_f1/                   servidor MCP propio "f1-data" (servidor.py) y cliente del agente (cliente.py)
-  fuentes/
-    openf1.py               cliente OpenF1
-    calendario.py           rondas de la temporada; resuelve la carrera por ronda, lugar o país
-    sanciones.py            consultas conjuntas: cruzan decisiones (FIA) con Race Control (OpenF1)
-    fia/                    documentos de los comisarios FIA
-      cache.py              caché SQLite del índice
-      scraper.py            lectura de fia.com (respeta el crawl-delay)
-      parser.py             PDF de una decisión -> datos
-      sync.py               índice inicial y actualización automática vía OpenF1
-      consultas.py          sanciones_piloto (carrera o temporada) / sanciones_carrera / ultima_sancion
-  rag/                      reglamento: ingest.py (párrafos), embeddings.py, store.py (coseno)
-  informe/                  informe de sanciones: datos.py, render.py, plantilla.html
-  tools/                    tools del agente
-static/                     app.css (estilos de la UI), logo.png y fuentes/ (tipografías OFL, compartidas con el informe)
-scripts/                    indexar_fia.py, ingestar_reglamento.py
-tests/                      pytest + fixtures (texto de PDFs reales)
-.streamlit/config.toml      tema de la UI
-data/                       reglamento/ (PDFs + glosario.md), fia_cache.sqlite, conversaciones.sqlite, chroma/
-                            (se commitean glosario.md, chroma/ y fia_cache.sqlite)
-informes/                   informes generados (PDF y HTML; no se commitean)
+  agent.py              agente, instrucciones y límites
+  conversaciones.py     memoria e historial
+  llm/                  adaptadores de proveedores y listado de modelos
+  mcp_f1/               servidor MCP f1-data y su cliente
+  fuentes/              OpenF1, calendario, FIA y cruce entre fuentes
+  rag/                  ingesta y búsqueda en el reglamento
+  informe/              datos, plantilla y generación de HTML y PDF
+  tools/                tools propias del agente
+data/                   índice FIA, base vectorial y glosario
+scripts/                indexar la FIA e ingerir el reglamento
+static/                 estilos, logo y tipografías
+tests/                  pruebas sin red ni claves
 ```
 
-## Limitaciones conocidas
+Para correr las pruebas: `python -m pytest`.
 
-- La primera consulta de un documento no cacheado espera el Crawl-delay de fia.com (10 s por pedido).
-- El parser de PDFs de la FIA cubre el formato estándar de decisiones; formatos especiales
-  (right of review, apelaciones) pueden salir incompletos.
-- El chunking por párrafo depende del formato de cada documento; está validado con los 6 PDFs
-  del corpus (tests con extractos reales). Otro formato puede necesitar su propio perfil.
-- El tier gratuito de embeddings (1.000 por día) limita tanto la ingesta como las búsquedas:
-  si se agota, la tool del reglamento lo avisa y el agente explica solo con la decisión.
-- `RAG_MIN_SIMILITUD` (0,63) está calibrado con `gemini-embedding-001`: consultas relevantes
-  0,66–0,83 y consultas sin relación ≤ 0,62. Con otro modelo de embeddings hay que recalibrarlo.
-- Los modelos locales (Ollama, LM Studio) dependen de que el modelo soporte bien tool calling;
-  los chicos pueden equivocarse con los argumentos. LM Studio no devuelve el razonamiento.
-- Se indexa un reglamento por archivo; si hay varias versiones en un año, hoy no se elige la
-  vigente a la fecha de la sanción. La tool avisa cuando la versión cargada es posterior a la
-  decisión, porque la numeración o el texto pueden haber cambiado.
-- Algunas decisiones se apoyan en las notas del director de carrera de cada GP (no están en
-  el corpus) o en el Código Deportivo Internacional. Si un artículo citado no está cargado, la
-  tool lo dice explícitamente para que el agente no lo siga buscando.
+## Limitaciones
 
-TODO (grupo): completar con lo observado en las pruebas.
+- El reglamento cubre 2024, 2025 y 2026. Las decisiones de la FIA están indexadas desde 2019, y Race Control está disponible desde 2023.
+- Hay una versión del reglamento por año. Si la versión cargada es posterior a la decisión, se avisa, porque el texto o la numeración pueden haber cambiado.
+- Algunas decisiones se apoyan en las notas del director de carrera de cada Gran Premio, que no están cargadas.
+- Las sanciones que solo figuran en Race Control no tienen artículo citado: se muestra una regla relacionada, identificada como tal.
+- Los documentos especiales de la FIA, como apelaciones o derechos de revisión, pueden leerse de forma incompleta.
+- Si la descarga de un PDF de la FIA falla, queda marcada y ese documento no se reintenta.
+- La primera lectura de un documento puede demorar por la pausa de 10 segundos entre pedidos a fia.com.
+- Los modelos locales chicos pueden equivocarse con los argumentos de las tools.
