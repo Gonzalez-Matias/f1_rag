@@ -23,9 +23,9 @@ flowchart LR
     A <--> LLM[LLM vía adaptador<br/>Gemini / OpenAI / DeepSeek / Claude<br/>Ollama / LM Studio]
     A <--> CK[(Checkpointer SQLite<br/>conversaciones)]
     A -- MCP stdio --> S[Servidor MCP propio f1-data]
-    S --> T1[openf1_calendario<br/>openf1_buscar_piloto<br/>openf1_mensajes_race_control]
-    S --> T2[fia_decisiones_de_piloto<br/>fia_decisiones_de_carrera<br/>fia_ultima_decision_de_piloto]
-    S --> T5[sanciones_de_piloto_completo] --> T1 & T2
+    S --> T1[openf1_calendario<br/>openf1_buscar_piloto<br/>openf1_mensajes_race_control<br/>openf1_sanciones_en_pista]
+    S --> T2[fia_decisiones_de_piloto<br/>fia_decisiones_de_carrera]
+    S --> T5[sanciones_de_piloto_completo<br/>sanciones_de_carrera_completo<br/>ultimas_sanciones_de_piloto_completo] --> T1 & T2
     A --> T3[buscar_en_reglamento]
     A --> T4[generar_informe]
     T1 --> OF[(OpenF1 API)]
@@ -41,15 +41,15 @@ flowchart LR
 | Memoria (checkpointer SQLite) | `agente_f1/conversaciones.py` | Cada conversación es un `thread_id` guardado en `data/conversaciones.sqlite`: el agente sigue sobre turnos anteriores ("¿y en qué sesión fue?") y las conversaciones sobreviven a reinicios. La UI reconstruye el historial desde esos mismos mensajes |
 | Adaptador de LLM | `agente_f1/llm/` | "Traé tu propio modelo": misma interfaz para Gemini, OpenAI, DeepSeek, Claude y modelos locales (Ollama, LM Studio); normaliza el razonamiento para la UI |
 | "Traé tu propia clave" | `app.py` (selector "Modelo") | El usuario elige proveedor y modelo y carga su clave; queda solo en la sesión del navegador (no se guarda en disco ni se comparte entre sesiones). Si no la carga, se usa la del `.env` |
-| Servidor MCP propio `f1-data` | `agente_f1/mcp_f1/` | Expone las 7 tools de datos de F1 por MCP, con la fuente en el nombre (`openf1_*`, `fia_*`) y una consulta conjunta (`sanciones_de_piloto_completo`) que une las dos fuentes en una llamada: el agente las usa como cualquier cliente, y el mismo servidor se puede conectar a Claude Desktop, Claude Code u otro cliente MCP |
+| Servidor MCP propio `f1-data` | `agente_f1/mcp_f1/` | Expone las 9 tools de datos de F1 por MCP, con la fuente en el nombre (`openf1_*`, `fia_*`) y tres consultas conjuntas (`sanciones_de_piloto_completo`, `sanciones_de_carrera_completo`, `ultimas_sanciones_de_piloto_completo`) que cruzan las decisiones de la FIA con las sanciones anunciadas por Race Control: el agente las usa como cualquier cliente, y el mismo servidor se puede conectar a Claude Desktop, Claude Code u otro cliente MCP |
 | Fuente FIA | `agente_f1/fuentes/fia/` | La decisión oficial (motivo, artículos) solo está en los PDFs de la FIA. Índice local en SQLite; solo se bajan los PDFs que se necesitan |
-| Fuente OpenF1 | `agente_f1/fuentes/openf1.py` | Nombre → número de auto; calendario (ronda, lugar, fechas); secuencia de Race Control; detectar carreras nuevas para actualizar el índice |
+| Fuente OpenF1 | `agente_f1/fuentes/openf1.py` | Nombre → número de auto; calendario (ronda, lugar, fechas); sanciones anunciadas y secuencia de Race Control; detectar carreras nuevas para actualizar el índice |
 | RAG del reglamento | `agente_f1/rag/` | El texto del reglamento por año no está en el modelo. Corpus de 10 documentos (reglamento deportivo, Código Deportivo Internacional y su Apéndice L de 2024, 2025 y 2026, y un glosario propio). Párrafos por inciso + similitud del coseno; se cita el inciso exacto (ej. B1.6.3b) |
 | Glosario propio | `data/reglamento/glosario.md` | Contenido del grupo: ~40 términos explicados para un fan nuevo, con su nombre en inglés. Entra al RAG como un documento más y lo usa el agente para explicar en simple |
 | Informe (PDF y HTML) | `agente_f1/informe/` | Resultado tangible: portada, resumen tipo torre de tiempos y una ficha por sanción con la regla aplicada y glosario. El modelo escribe solo los textos en simple; la decisión, el artículo, la fecha, el link y el texto del reglamento salen de las fuentes |
-| Middleware: `ToolCallLimitMiddleware` (LangChain) | `agente_f1/agent.py` | Único middleware. Limita a 6 búsquedas en el reglamento y 20 llamadas a tools por pregunta. Un modelo de razonamiento llegó a hacer ~30 búsquedas seguidas de un artículo que no estaba en el corpus; el prompt lo desalienta pero no lo garantiza, y el middleware corta donde el grafo ejecuta la tool, sin depender del modelo. No se resolvió con código propio porque haría falta contar llamadas por ejecución dentro del grafo, que es justo lo que este middleware ya hace |
-| UI | `app.py`, `.streamlit/config.toml` | Mismo estilo que el informe (barra lateral oscura, Barlow / Barlow Condensed / JetBrains Mono, acento rojo). Barra lateral con conversaciones e informes generados. Chat en markdown con un bloque desplegable "Razonamiento" que muestra en vivo el razonamiento y cada tool, con su fuente (FIA, OpenF1, Reglamento), argumentos y resultado en JSON. Mientras el agente responde no se puede enviar otro mensaje: el botón **Detener** corta la respuesta y deja la conversación lista para seguir (`conversaciones.cerrar_turno_interrumpido`) |
-| Informe como parte de la respuesta | `app.py`, `agente_f1/informe/render.py`, `agente_f1/agent.py` | Cuando el agente explica sanciones de una carrera arma siempre el informe (el prompt se lo pide) y el informe es la respuesta: no hay texto antes. La UI muestra el informe dentro de la conversación, con los colores de la app (`render.vista_previa(modo="chat")`, misma plantilla y mismos datos que el PDF), y debajo las descargas en PDF y HTML. Los informes anteriores quedan en la barra lateral. Si una respuesta explicó sanciones sin informe (ej. varias carreras), aparece el botón "Generar informe en PDF" |
+| Middleware: `ToolCallLimitMiddleware` (LangChain) | `agente_f1/agent.py` | Único middleware. Limita a 12 búsquedas en el reglamento y 30 llamadas a tools por pregunta (una carrera entera puede tener muchas sanciones). Un modelo de razonamiento llegó a hacer ~30 búsquedas seguidas de un artículo que no estaba en el corpus; el prompt lo desalienta pero no lo garantiza, y el middleware corta donde el grafo ejecuta la tool, sin depender del modelo. No se resolvió con código propio porque haría falta contar llamadas por ejecución dentro del grafo, que es justo lo que este middleware ya hace |
+| UI | `app.py`, `.streamlit/config.toml` | Tema claro con el logo (`static/logo.png`), Barlow / Barlow Condensed / JetBrains Mono y el rojo del logo como acento. Barra lateral con las conversaciones (cada una con un menú de tres puntos para eliminarla) y, debajo de la abierta, sus informes. Chat en markdown con un bloque desplegable "Razonamiento" que muestra en vivo el razonamiento y cada tool, con su fuente (FIA, OpenF1, Reglamento), argumentos y resultado en JSON. Mientras el agente responde no se puede enviar otro mensaje: el botón **Detener** corta la respuesta y deja la conversación lista para seguir (`conversaciones.cerrar_turno_interrumpido`) |
+| Informe como parte de la respuesta | `app.py`, `agente_f1/informe/render.py`, `agente_f1/agent.py` | Cuando el agente explica sanciones de una carrera arma siempre el informe (el prompt se lo pide) y el informe es la respuesta: no hay texto antes. La UI muestra el informe dentro de la conversación, con los colores de la app (`render.vista_previa(modo="chat")`, misma plantilla y mismos datos que el PDF), y debajo las descargas en PDF y HTML. Los informes de una conversación quedan como subsección suya en la barra lateral. Si una respuesta explicó sanciones sin informe (ej. varias carreras), aparece el botón "Generar informe en PDF" |
 
 TODO (grupo): completar la justificación de cada componente para la defensa.
 
@@ -207,14 +207,6 @@ configuración de servidores MCP (rutas absolutas a este proyecto):
 }
 ```
 
-Herramientas sueltas, para probar sin el agente:
-
-```bash
-python -m agente_f1.fuentes.fia piloto 2026 "Sao Paulo" 87 --nombre Bearman
-python -m agente_f1.fuentes.fia carrera 2026 "Sao Paulo"
-python -m agente_f1.fuentes.fia ultima 44 --nombre Hamilton
-```
-
 Tests (sin red ni API keys; usan texto de PDFs reales en `tests/fixtures/`):
 
 ```bash
@@ -235,21 +227,19 @@ agente_f1/
   fuentes/
     openf1.py               cliente OpenF1
     calendario.py           rondas de la temporada; resuelve la carrera por ronda, lugar o país
-    sanciones.py            consulta conjunta: piloto (OpenF1) + decisiones (FIA) + Race Control (OpenF1)
+    sanciones.py            consultas conjuntas: cruzan decisiones (FIA) con Race Control (OpenF1)
     fia/                    documentos de los comisarios FIA
       cache.py              caché SQLite del índice
       scraper.py            lectura de fia.com (respeta el crawl-delay)
       parser.py             PDF de una decisión -> datos
       sync.py               índice inicial y actualización automática vía OpenF1
       consultas.py          sanciones_piloto (carrera o temporada) / sanciones_carrera / ultima_sancion
-      __main__.py           línea de comandos
   rag/                      reglamento: ingest.py (párrafos), embeddings.py, store.py (coseno)
   informe/                  informe de sanciones: datos.py, render.py, plantilla.html
   tools/                    tools del agente
-static/fuentes/             tipografías (licencia OFL), compartidas por la UI y el informe
+static/                     app.css (estilos de la UI), logo.png y fuentes/ (tipografías OFL, compartidas con el informe)
 scripts/                    indexar_fia.py, ingestar_reglamento.py
 tests/                      pytest + fixtures (texto de PDFs reales)
-docs/                       consigna, mockup de la UI
 .streamlit/config.toml      tema de la UI
 data/                       reglamento/ (PDFs + glosario.md), fia_cache.sqlite, conversaciones.sqlite, chroma/
                             (solo glosario.md se commitea)

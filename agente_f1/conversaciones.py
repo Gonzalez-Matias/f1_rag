@@ -10,6 +10,7 @@
 import sqlite3
 import threading
 import time
+from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -77,6 +78,26 @@ def borrar(thread_id: str) -> None:
         get_checkpointer().delete_thread(thread_id)
         _db().execute("DELETE FROM conversaciones WHERE thread_id=?", (thread_id,))
         _db().commit()
+
+
+def rutas_de_informes(thread_id: str, checkpointer=None) -> list[Path]:
+    """HTML de los informes generados en una conversación, en orden y si siguen en disco.
+
+    Sale de los resultados de `generar_informe` guardados en el checkpointer: no hace falta
+    el agente, así que la barra lateral lo puede usar aunque el modelo no esté disponible.
+    """
+    guardado = (checkpointer or get_checkpointer()).get_tuple({"configurable": {"thread_id": thread_id}})
+    mensajes = guardado.checkpoint["channel_values"].get("messages", []) if guardado else []
+    rutas = []
+    for m in mensajes:
+        if not isinstance(m, ToolMessage) or m.name != "generar_informe":
+            continue
+        resultado = parse_json(m.content)
+        relativa = ((resultado.get("archivos") or {}).get("html") if isinstance(resultado, dict) else None)
+        ruta = config.ROOT / relativa if relativa else None
+        if ruta and ruta.exists() and ruta not in rutas:
+            rutas.append(ruta)
+    return rutas
 
 
 def turnos(agent, thread_id: str, provider: LLMProvider) -> list[dict]:

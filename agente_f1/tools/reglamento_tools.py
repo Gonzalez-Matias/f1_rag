@@ -4,7 +4,7 @@ from datetime import datetime
 from langchain_core.tools import tool
 
 from ..rag import store
-from ._util import seguro
+from ..util import seguro
 
 
 @tool(parse_docstring=True)

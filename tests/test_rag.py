@@ -69,6 +69,14 @@ def test_busqueda_por_metadatos(base):
     assert [r["cita"] for r in res] == ["B1.6.3a", "B1.6.3b", "B1.6.3c", "B1.6.3d", "B1.6.3e"]
 
 
+def test_parrafo_exacto_no_usa_embeddings(base, monkeypatch):
+    def falla(*a, **k):
+        raise AssertionError("no debería calcular embeddings")
+    monkeypatch.setattr(store.get_vectorstore(), "similarity_search_with_score", falla)
+    assert store.parrafo_exacto("B1.6.3b", 2026)["cita"] == "B1.6.3b"
+    assert store.parrafo_exacto("Z9.9", 2026) is None
+
+
 def test_filtra_por_año(base):
     res = store.buscar("pit lane", año=1999, cita="B1.6.3b")
     assert len(res) == 1 and res[0]["no_esta_en_corpus"]  # ningún párrafo de otro año, solo el aviso

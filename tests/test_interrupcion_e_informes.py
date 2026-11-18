@@ -1,8 +1,10 @@
 """Detener una respuesta a mitad de camino, y listado / vista previa de informes. Sin red."""
+import json
+
 from langchain.agents import create_agent
 from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 
@@ -86,23 +88,41 @@ def test_el_historial_muestra_el_turno_interrumpido():
 
 # ---------------------------------------------------------------- informes
 
-def test_listar_informes(tmp_path):
-    (tmp_path / "20261107-220154-sao-paulo.html").write_text(
-        "<html><head><title>Informe de sanciones · Gran Premio de São Paulo 2026</title></head></html>", encoding="utf-8")
-    (tmp_path / "20261107-220154-sao-paulo.pdf").write_bytes(b"%PDF")
-    (tmp_path / "20261108-101500-mexico.html").write_text("<title>Informe de sanciones · México 2026</title>", encoding="utf-8")
-    informes = render.listar(tmp_path)
-    assert [i["titulo"] for i in informes] == ["México 2026", "Gran Premio de São Paulo 2026"]   # el más nuevo primero
-    assert informes[0]["pdf"] is None and informes[1]["pdf"].name.endswith(".pdf")
-    assert f"{informes[1]['generado']:%d/%m/%Y %H:%M}" == "07/11/2026 22:01"
-    assert len(render.listar(tmp_path, maximo=1)) == 1
-    assert render.listar(tmp_path / "no-existe") == []
+def test_leer_informe(tmp_path):
+    html = tmp_path / "20261107-220154-sao-paulo.html"
+    html.write_text("<html><head><title>Informe de sanciones · Gran Premio de São Paulo 2026</title></head></html>",
+                    encoding="utf-8")
+    assert render.leer(html)["pdf"] is None
+    html.with_suffix(".pdf").write_bytes(b"%PDF")
+    informe = render.leer(html)
+    assert informe["titulo"] == "Gran Premio de São Paulo 2026" and informe["pdf"].name.endswith(".pdf")
+    assert f"{informe['generado']:%d/%m/%Y %H:%M}" == "07/11/2026 22:01"
+
+
+def test_cada_conversacion_tiene_sus_informes(tmp_path, monkeypatch):
+    monkeypatch.setattr(conversaciones.config, "ROOT", tmp_path)
+    (tmp_path / "informes").mkdir()
+    (tmp_path / "informes" / "a.html").write_text("x")   # "b.html" ya no está en disco
+    saver = InMemorySaver()
+
+    @tool("generar_informe")
+    def generar(n: str) -> str:
+        """Tool de prueba."""
+        return json.dumps({"archivos": {"html": f"informes/{n}.html"}}) if n != "falla" else '{"error": "x"}'
+
+    def turno(thread_id, *nombres):
+        llamadas = [{"name": "generar_informe", "args": {"n": n}, "id": f"c{i}"} for i, n in enumerate(nombres)]
+        agente = create_agent(model=ModeloFalso(responses=[AIMessage(content="", tool_calls=llamadas), AIMessage(content="fin")]),
+                              tools=[generar], checkpointer=saver)
+        agente.invoke({"messages": [{"role": "user", "content": "hola"}]}, {"configurable": {"thread_id": thread_id}})
+
+    turno("con-informe", "a", "b", "falla", "a")
+    turno("otra", "falla")
+    assert conversaciones.rutas_de_informes("con-informe", saver) == [tmp_path / "informes" / "a.html"]
+    assert conversaciones.rutas_de_informes("otra", saver) == []
+    assert conversaciones.rutas_de_informes("no-existe", saver) == []
 
 
 def test_vista_previa_usa_las_tipografias_de_la_app():
-    original = "<html><head><style>@font-face { src: url(fuentes/Barlow-Regular.ttf); }</style></head><body>x</body></html>"
-    vista = render.vista_previa(original)
-    chat = render.vista_previa(original, modo="chat")
-    assert "--tinta: #e6e6ea" in chat and "max-width:210mm" not in chat and 'target="_blank"' in chat
+    vista = render.vista_previa("<style>@font-face { src: url(fuentes/Barlow-Regular.ttf); }</style>")
     assert "url(/app/static/fuentes/Barlow-Regular.ttf)" in vista and "url(fuentes/" not in vista
-    assert vista.index("max-width:210mm") < vista.index("</head>")   # la hoja simulada va en el <head>

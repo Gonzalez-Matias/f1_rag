@@ -92,8 +92,25 @@ def _resultado(texto: str, meta: dict, coincidencia: str, similitud: float | Non
     }
 
 
+def _exactos(cita: str, por_año: dict | None) -> list[tuple]:
+    """Párrafos de un artículo por metadatos, en orden: (id, texto, metadatos)."""
+    store = get_vectorstore()
+    articulo, inciso = partir_cita(cita)
+    res = store.get(where=_where(por_año, {"articulo": articulo}, {"inciso": inciso} if inciso else None))
+    if not res["ids"] and inciso:  # el inciso puede no existir como párrafo propio
+        res = store.get(where=_where(por_año, {"articulo": articulo}))
+    return sorted(zip(res["ids"], res["documents"], res["metadatas"]),
+                  key=lambda r: (r[2].get("inciso", ""), r[2].get("parte", 0)))
+
+
+def parrafo_exacto(cita: str, año: int) -> dict | None:
+    """Primer párrafo de un artículo. No usa embeddings, así que no gasta cupo."""
+    exactos = _exactos(cita, {"año": año})
+    return _resultado(exactos[0][1], exactos[0][2], "exacta", None) if exactos else None
+
+
 def buscar(consulta: str, año: int | None = None, cita: str | None = None,
-           k: int = config.RAG_TOP_K, min_similitud: float = config.RAG_MIN_SIMILITUD) -> list[dict]:
+           min_similitud: float = config.RAG_MIN_SIMILITUD) -> list[dict]:
     """Párrafos del reglamento relevantes para la consulta.
 
     1. Si viene `cita` (ej. "B1.6.3b"), trae ese párrafo exacto por metadata.
@@ -107,12 +124,7 @@ def buscar(consulta: str, año: int | None = None, cita: str | None = None,
     if cita:
         # Búsqueda por metadatos (sin embeddings): "B1.6.3b" -> articulo B1.6.3, inciso b.
         # Sin inciso ("B1.6.3") trae el artículo completo, todos sus incisos en orden.
-        articulo, inciso = partir_cita(cita)
-        res = store.get(where=_where(por_año, {"articulo": articulo}, {"inciso": inciso} if inciso else None))
-        if not res["ids"] and inciso:  # el inciso puede no existir como párrafo propio
-            res = store.get(where=_where(por_año, {"articulo": articulo}))
-        exactos = sorted(zip(res["ids"], res["documents"], res["metadatas"]),
-                         key=lambda r: (r[2].get("inciso", ""), r[2].get("parte", 0)))
+        exactos = _exactos(cita, por_año)
         for id_, texto, meta in exactos[:MAX_EXACTOS]:
             vistos.add(id_)
             out.append(_resultado(texto, meta, "exacta", None))
@@ -130,7 +142,7 @@ def buscar(consulta: str, año: int | None = None, cita: str | None = None,
     # La similitud también busca en el glosario propio (año 0: vale para todas las temporadas).
     con_glosario = {"$or": [{"año": año}, {"año": 0}]} if año else None
     try:
-        parecidos = _con_reintento(lambda: store.similarity_search_with_score(consulta, k=k, filter=con_glosario))
+        parecidos = _con_reintento(lambda: store.similarity_search_with_score(consulta, k=config.RAG_TOP_K, filter=con_glosario))
     except Exception as exc:
         if not out or not _es_limite(exc):
             raise

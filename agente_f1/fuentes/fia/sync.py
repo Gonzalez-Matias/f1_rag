@@ -14,7 +14,7 @@ INTERVALO_CHEQUEO = 15 * 60   # mínimo entre chequeos con OpenF1
 REINTENTO_TEMPORADA = 6 * 3600
 
 
-def indexar(desde_año: int = 2019, hasta_año: int | None = None, log=print) -> None:
+def indexar(desde_año: int = 2019, log=print) -> None:
     """Guarda título y URL de todos los documentos, sin bajar PDFs (~35 min desde 2019).
 
     Se puede cortar y volver a correr: retoma donde quedó.
@@ -23,7 +23,7 @@ def indexar(desde_año: int = 2019, hasta_año: int | None = None, log=print) ->
     con.execute("DELETE FROM seasons")  # por si apareció una temporada nueva
     con.commit()
     seasons = scraper.temporadas(con)
-    for año in sorted((y for y in seasons if desde_año <= y <= (hasta_año or max(seasons))), reverse=True):
+    for año in sorted((y for y in seasons if y >= desde_año), reverse=True):
         for carrera in scraper.carreras(con, año, ttl=0):
             pendiente = con.execute("SELECT docs_fetched_at IS NULL FROM events WHERE event_id=?",
                                     (carrera["event_id"],)).fetchone()[0]

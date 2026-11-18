@@ -1,22 +1,22 @@
-# Estilo del informe PDF en oscuro (como su portada): acento rojo,
+# Tema claro, con el rojo del logo como acento,
 # Barlow / Barlow Condensed / JetBrains Mono (incluidas en static/fuentes, licencia OFL).
 
 [server]
-enableStaticServing = true   # sirve static/ (tipografías)
+enableStaticServing = true   # sirve static/ (tipografías y logo)
 
 [client]
 toolbarMode = "minimal"
 
 [theme]
-base = "dark"
-primaryColor = "#e8433a"
-backgroundColor = "#14151c"
-secondaryBackgroundColor = "#1f2029"
-textColor = "#e6e6ea"
-linkColor = "#ff6b61"
-codeTextColor = "#ff6b61"
-codeBackgroundColor = "#2a1d1f"
-borderColor = "#2a2b36"
+base = "light"
+primaryColor = "#d92d23"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f5f7"
+textColor = "#14151c"
+linkColor = "#c9281f"
+codeTextColor = "#c9281f"
+codeBackgroundColor = "#fdeeed"
+borderColor = "#e3e4ea"
 showSidebarBorder = false
 baseRadius = "0.45rem"
 font = "Barlow, sans-serif"
@@ -25,11 +25,11 @@ headingFontWeights = [800, 700, 700, 600, 600, 600]
 codeFont = "JetBrains Mono, monospace"
 
 [theme.sidebar]
-backgroundColor = "#0d0e13"
-secondaryBackgroundColor = "#1a1b23"
-textColor = "#e6e6ea"
-primaryColor = "#e8433a"
-codeBackgroundColor = "#1a1b23"
+backgroundColor = "#f4f5f7"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#14151c"
+primaryColor = "#d92d23"
+codeBackgroundColor = "#fdeeed"
 
 [[theme.fontFaces]]
 family = "Barlow"

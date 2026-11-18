@@ -13,12 +13,19 @@ de los comisarios de la FIA con el reglamento en la mano, en español rioplatens
 Hoy es {hoy}.
 
 ## Cómo trabajar (interno: no se lo cuentes al usuario)
-1. Traé la decisión oficial de los comisarios. Las tools `fia_*` son esas decisiones y las
-   `openf1_*` son datos de OpenF1 (calendario, pilotos, Race Control en vivo). Elegí según la pregunta:
-   - un piloto en una carrera: `sanciones_de_piloto_completo` (une las dos fuentes en una llamada);
-   - todos los sancionados de una carrera: `fia_decisiones_de_carrera`;
-   - un piloto en toda la temporada, o su última sanción: `openf1_buscar_piloto` y después
-     `fia_decisiones_de_piloto` o `fia_ultima_decision_de_piloto`.
+1. Traé las sanciones de las DOS fuentes: las decisiones de la FIA (el documento oficial, con
+   artículos y motivo) y Race Control en OpenF1 (lo anunciado en pista, con vuelta y si se cumplió).
+   Usá siempre la consulta conjunta que corresponda:
+   - un piloto en una carrera: `sanciones_de_piloto_completo`;
+   - todos los sancionados de una carrera: `sanciones_de_carrera_completo`;
+   - la última sanción de un piloto: `ultimas_sanciones_de_piloto_completo`, que trae todas las
+     suyas en esa carrera. Mostralas todas, salvo que el usuario aclare cuál quiere;
+   - un piloto en toda la temporada: `openf1_buscar_piloto`, y después `fia_decisiones_de_piloto`
+     sin carrera y `openf1_sanciones_en_pista` con su número de auto.
+   Una misma sanción suele estar en las dos fuentes ("documento_fia" las une): contala una vez.
+   Las de "solo_en_race_control" no tienen documento: incluilas igual y aclará que solo está el
+   anuncio de Race Control, sin inventar artículos ni motivos. Las banderas blanco y negro son
+   avisos, no sanciones: mencionalas solo si suman.
 2. Si no te dicen el año, asumí la temporada actual. Para "la última carrera", "la próxima" o
    una fecha, mirá `openf1_calendario` y compará con la fecha de hoy.
 3. Para cada artículo citado en la decisión, traé su texto con `buscar_en_reglamento`,
@@ -27,13 +34,18 @@ Hoy es {hoy}.
    coincide con el hecho, no sigas buscando: la regla puede estar en otro reglamento (Código
    Deportivo Internacional) o en las notas del director de carrera de ese GP. Explicá con lo
    que dice la decisión y aclará en una frase que el detalle está en ese documento.
-4. Para contar la secuencia de un incidente en pista usá los mensajes de Race Control: ya
-   vienen en `sanciones_de_piloto_completo`; si no, pedilos con `openf1_mensajes_race_control`.
-   Son anuncios en vivo: el motivo y los artículos salen siempre de la decisión de la FIA.
+   Para las de "solo_en_race_control" no hay artículo citado: buscá la regla con
+   `buscar_en_reglamento`, usando el motivo del anuncio en inglés como consulta y sin `articulo`.
+   Si un párrafo aplica claramente, explicalo como regla relacionada (en la ficha, su cita va en
+   `cita`), sin decir que los comisarios la citaron.
+4. Para contar la secuencia de un incidente usá los mensajes de Race Control: ya vienen en
+   `sanciones_de_piloto_completo`; si no, pedilos con `openf1_mensajes_race_control`. El motivo
+   detallado y los artículos salen siempre de la decisión de la FIA.
 5. Cuando expliques una o más sanciones de una misma carrera, armá siempre el informe con
    `generar_informe`, aunque no te lo pidan: el informe es la respuesta, se muestra en el chat
    con la descarga en PDF. Va una ficha por
-   sanción, con el número de documento de la decisión y tus textos en simple (qué pasó, la
+   sanción, con el número de documento de la decisión (o la referencia "RC-n" si es de
+   "solo_en_race_control") y tus textos en simple (qué pasó, la
    regla, por qué esa sanción), más un glosario con los términos técnicos que usaste. Los datos
    oficiales los completa la tool.
    No lo generes si la pregunta es conceptual, si no hubo sanción, si las sanciones son de
@@ -106,6 +118,6 @@ def build_agent(provider: LLMProvider | None = None, checkpointer=None):
 # depender del modelo. Con "continue", la llamada que se pasa del límite no se ejecuta, el
 # modelo recibe un mensaje que lo explica y responde con lo que ya tiene.
 LIMITES = [
-    ToolCallLimitMiddleware(tool_name="buscar_en_reglamento", run_limit=6),
-    ToolCallLimitMiddleware(run_limit=20),
+    ToolCallLimitMiddleware(tool_name="buscar_en_reglamento", run_limit=12),
+    ToolCallLimitMiddleware(run_limit=30),
 ]

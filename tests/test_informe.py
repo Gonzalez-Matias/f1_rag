@@ -45,13 +45,14 @@ def datos_de_ejemplo():
              "doc": "41", "fecha": "07/11/2026", "url": "https://www.fia.com/x.pdf"}
     return {"gp": {"nombre": "Gran Premio de São Paulo 2026", "año": 2026, "circuito": "São Paulo",
                    "fechas": "6 al 8 de noviembre de 2026", "reglamento": "2026 Formula 1 Regulations - Section B"},
-            "generado": "07/11/2026", "sanciones": [ficha], "fichas": [ficha],
+            "generado": "07/11/2026", "fichas": [ficha],
             "resumen": [("reprimendas", 1)], "glosario": [("Reprimenda", "Advertencia formal.")]}
 
 
 def test_plantilla_html():
     html = render.html(datos_de_ejemplo())
     assert "Gran Premio de São Paulo 2026" in html and "Art. B1.6.3b" in html and "Oliver Bearman" in html
+    assert '<style media="screen">' in html   # la vista de pantalla viaja en el mismo archivo
 
 
 def test_genera_pdf(tmp_path, monkeypatch):
@@ -74,5 +75,23 @@ def test_el_informe_sale_aunque_falle_el_reglamento(monkeypatch):
     def falla(*a, **k):
         raise RuntimeError("Error executing plan: Internal error: Error finding id")
     monkeypatch.setattr(datos.store, "motivo_no_disponible", lambda: None)
-    monkeypatch.setattr(datos.store, "buscar", falla)
+    monkeypatch.setattr(datos.store, "parrafo_exacto", falla)
     assert datos._texto_reglamento(2026, "B1.6.3b") is None
+
+
+def test_ficha_de_una_sancion_sin_documento_fia(monkeypatch):
+    from agente_f1.informe import datos, render
+
+    sancion = {"referencia": "RC-3", "numero_auto": 81, "piloto": "PIA", "sancion": "10 SECOND STOP/GO PENALTY",
+               "sesion": "Race", "vuelta": 16, "fecha": "2025-11-09T18:10:00+00:00"}
+    monkeypatch.setattr(datos.openf1, "buscar_meeting", lambda año, carrera: {"meeting_key": 6, "meeting_name": "São Paulo Grand Prix"})
+    monkeypatch.setattr(datos.openf1, "get", lambda *a, **k: [{"driver_number": 81, "name_acronym": "PIA", "full_name": "OSCAR PIASTRI"}])
+    monkeypatch.setattr(datos.openf1, "sanciones_en_pista", lambda año, mk: {"sanciones": [sancion], "banderas": []})
+    armado, avisos = datos.armar(2025, "São Paulo", [{"documento": "rc-3", "que_paso": "Chocó."}, {"documento": "RC-9"}])
+    assert len(armado["fichas"]) == 1 and "RC-9" in avisos[0]
+    ficha = armado["fichas"][0]
+    assert (ficha["auto"], ficha["piloto"], ficha["etiqueta"], ficha["sesion"], ficha["fecha"]) == (
+        81, "Oscar Piastri", "Stop & Go", "Carrera", "09/11/2025")
+    html = render.html(armado)
+    assert "Regla relacionada" not in html   # sin cita no se muestra
+    assert "Sin documento de la FIA" in html and "vuelta 16" in html and "Race Control (OpenF1)" in html
