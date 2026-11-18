@@ -149,6 +149,8 @@ def render_informe(ruta_html: Path, ruta_pdf: Path | None, clave: str):
     if ruta_pdf and ruta_pdf.exists():
         columnas[0].download_button("Descargar PDF", ruta_pdf.read_bytes, file_name=ruta_pdf.name,
                                     mime="application/pdf", key=f"dl-{clave}-pdf", type="primary", width="stretch")
+    else:
+        columnas[0].caption("PDF no disponible en este servidor")
     columnas[1].download_button("Descargar HTML", ruta_html.read_bytes, file_name=ruta_html.name,
                                 mime="text/html", key=f"dl-{clave}-html", width="stretch")
 
