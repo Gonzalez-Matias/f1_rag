@@ -104,15 +104,25 @@ TODO: verificar cada proveedor con el modelo final elegido.
 
 ### 1. Índice de documentos de la FIA
 
+El repo ya incluye el índice en `data/fia_cache.sqlite`: título y URL de cada documento, más las
+decisiones ya procesadas. No hace falta generarlo para usar la app.
+
+Los PDFs que faltan se bajan cuando el agente los necesita y quedan en el caché. Antes de cada
+consulta se pregunta a OpenF1 si hubo sesiones desde la última sincronización y, si hubo, se
+actualiza solo esa carrera (1 pedido a la FIA).
+
+Para regenerarlo desde cero:
+
 ```bash
-python scripts/indexar_fia.py        # una vez, ~35 min (respeta el Crawl-delay de 10 s de fia.com)
+rm data/fia_cache.sqlite
+python scripts/indexar_fia.py        # ~35 min (respeta el Crawl-delay de 10 s de fia.com)
 ```
 
-Guarda título y URL de cada documento de 2019 en adelante en `data/fia_cache.sqlite`.
-Los PDFs se bajan recién cuando el agente los necesita y quedan en el caché.
-Después de cada fin de semana de carrera no hace falta volver a correrlo: antes de cada consulta
-se pregunta a OpenF1 si hubo sesiones desde la última sincronización y, si hubo, se actualiza
-solo esa carrera (1 pedido a la FIA).
+Como la app actualiza este archivo al usarse, para que git no lo muestre como modificado:
+
+```bash
+git update-index --skip-worktree data/fia_cache.sqlite
+```
 
 ### 2. Corpus del RAG
 
@@ -242,7 +252,7 @@ scripts/                    indexar_fia.py, ingestar_reglamento.py
 tests/                      pytest + fixtures (texto de PDFs reales)
 .streamlit/config.toml      tema de la UI
 data/                       reglamento/ (PDFs + glosario.md), fia_cache.sqlite, conversaciones.sqlite, chroma/
-                            (solo glosario.md se commitea)
+                            (se commitean glosario.md, chroma/ y fia_cache.sqlite)
 informes/                   informes generados (PDF y HTML; no se commitean)
 ```
 
