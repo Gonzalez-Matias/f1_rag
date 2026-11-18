@@ -11,10 +11,15 @@ from . import scraper
 from .cache import conectar
 from .sync import auto_actualizar
 
-TITULO_SANCION_RE = re.compile(r"^(?:Doc\s*\d+\s*-\s*)?(Infringement|Offence|Decision)\b\s*-?\s*", re.I)
+# La FIA también publica "Corrected Race - Infringement", "Corrected - Sprint Infringement",
+# "Replacement for Document 47 - Offence", "(Infringement" e incluso "Infringment".
+TITULO_SANCION_RE = re.compile(
+    r"^(?:Doc\s*\d+\s*[-–]\s*)?\(?\s*(?:Replacement for Document\s*\d+\s*-\s*)?(?:Corrected\s*(?:-\s*)?)?"
+    r"(?:(?:Race|Sprint|Qualifying)\s*(?:-\s*)?)?(Infringe?ment|Offence|Decision)\b\s*(?:\(Corrected\)\s*)?-?\s*", re.I)
 TITULO_AUTOS_RE = re.compile(r"^Cars?\s+((?:\d+|\s|,|&|and)+)", re.I)
 VUELTAS_BORRADAS_RE = re.compile(r"deleted\s+lap\s+time", re.I)
 SIN_SANCION_RE = re.compile(r"no\s+further\s+action", re.I)
+PRIMERA_TEMPORADA = 2019  # desde acá hay documentos indexados
 
 
 # ---------------------------------------------------------------- helpers
@@ -67,6 +72,29 @@ def autos_del_titulo(titulo: str) -> list[int]:
     return [int(n) for n in re.findall(r"\d+", m.group(1))] if m else []
 
 
+def _clave_documento(titulo: str) -> str:
+    """Lo que describe el título, sin el encabezado ni la marca de corregido."""
+    resto = re.sub(r"\(?\bcorrected\b\)?\s*-?", " ", TITULO_SANCION_RE.sub("", titulo, count=1), flags=re.I)
+    return re.sub(r"[^a-z0-9]+", " ", normalizar(resto)).strip()
+
+
+def _documentos_de_sancion(con, carrera: dict) -> list[dict]:
+    """Documentos de sanción vigentes: si la FIA corrigió uno, queda solo la versión nueva.
+
+    La lista viene del más nuevo al más viejo, así que se conserva el primero de cada título.
+    """
+    vistos, out = set(), []
+    for doc in scraper.documentos(con, carrera):
+        if not es_sancion(doc["title"]):
+            continue
+        clave = _clave_documento(doc["title"])
+        if clave and clave in vistos:
+            continue
+        vistos.add(clave)
+        out.append(doc)
+    return out
+
+
 def _coincide_nombre(nombre: str | None, buscado: str | None) -> bool:
     if not buscado:
         return True
@@ -110,8 +138,8 @@ def _registro(carrera: dict, doc: dict, data: dict) -> dict:
 
 def _sanciones_del_piloto(con, carrera, auto, nombre, incluir_sin_sancion):
     out = []
-    for doc in scraper.documentos(con, carrera):
-        if not es_sancion(doc["title"]) or VUELTAS_BORRADAS_RE.search(doc["title"]):
+    for doc in _documentos_de_sancion(con, carrera):
+        if VUELTAS_BORRADAS_RE.search(doc["title"]):
             continue
         autos = autos_del_titulo(doc["title"])
         # Si el título nombra autos y no está el nuestro, no hace falta bajarlo.
@@ -129,11 +157,6 @@ def _sanciones_del_piloto(con, carrera, auto, nombre, incluir_sin_sancion):
 
 
 # ---------------------------------------------------------------- consultas
-
-def listar_carreras(año: int) -> list[dict]:
-    """Carreras con documentos FIA en una temporada, de la más reciente a la más vieja."""
-    return [{"carrera": c["name"], "año": c["year"]} for c in scraper.carreras(conectar(), año)]
-
 
 def sanciones_piloto(año: int, carrera: str | int | None, numero_auto: int, nombre_piloto: str | None = None,
                      incluir_sin_sancion: bool = False) -> list[dict]:
@@ -155,17 +178,14 @@ def sanciones_piloto(año: int, carrera: str | int | None, numero_auto: int, nom
     return out
 
 
-def sanciones_carrera(año: int, carrera: str, incluir_vueltas_borradas: bool = False,
-                      incluir_sin_sancion: bool = False) -> list[dict]:
+def sanciones_carrera(año: int, carrera: str, incluir_sin_sancion: bool = False) -> list[dict]:
     """Todas las sanciones de una carrera (procesa todos sus documentos de sanción)."""
     con = conectar()
     auto_actualizar(con)
     c = _buscar_carrera(con, año, carrera)
     out = []
-    for doc in scraper.documentos(con, c):
-        if not es_sancion(doc["title"]):
-            continue
-        if VUELTAS_BORRADAS_RE.search(doc["title"]) and not incluir_vueltas_borradas:
+    for doc in _documentos_de_sancion(con, c):
+        if VUELTAS_BORRADAS_RE.search(doc["title"]):
             continue
         data = scraper.procesar(con, doc)
         if not data:
@@ -176,31 +196,32 @@ def sanciones_carrera(año: int, carrera: str, incluir_vueltas_borradas: bool = 
     return out
 
 
-def decision(año: int, carrera: str, documento: str | int) -> dict | None:
-    """Una decisión por su número de documento (ej. 41), con todos sus datos oficiales."""
+def decisiones(año: int, carrera: str, numeros: list) -> dict[str, dict]:
+    """Decisiones por número de documento (ej. "41"): {número pedido: datos oficiales}."""
     con = conectar()
     c = _buscar_carrera(con, año, carrera)
-    numero = str(documento).strip().lstrip("0") or "0"
     docs = [d for d in scraper.documentos(con, c) if es_sancion(d["title"])]
-    # Desde ~2020 el título empieza con "Doc 41 - ..."; antes hay que procesar el PDF para saberlo.
-    por_titulo = [d for d in docs if re.match(rf"^Doc\s*0*{numero}\b", d["title"])]
-    for doc in por_titulo or docs:
-        data = scraper.procesar(con, doc)
-        if data and str(data.get("document", "")).lstrip("0") == numero:
-            return _registro(c, doc, data)
-    return None
+    out = {}
+    for pedido in numeros:
+        numero = str(pedido).strip().lstrip("0") or "0"
+        # Desde ~2020 el título empieza con "Doc 41 - ..."; antes hay que procesar el PDF para saberlo.
+        por_titulo = [d for d in docs if re.match(rf"^Doc\s*0*{numero}\b", d["title"])]
+        for doc in por_titulo or docs:
+            data = scraper.procesar(con, doc)
+            if data and str(data.get("document", "")).lstrip("0") == numero:
+                out[str(pedido)] = _registro(c, doc, data)
+                break
+    return out
 
 
-def ultima_sancion(numero_auto: int, nombre_piloto: str | None = None, desde_año: int | None = None,
-                   hasta_año: int = 2019) -> dict | None:
-    """Última sanción de un auto/piloto, buscando hacia atrás desde `desde_año`.
+def ultima_sancion(numero_auto: int, nombre_piloto: str | None = None) -> dict | None:
+    """Última sanción de un auto/piloto, buscando hacia atrás desde la temporada actual.
 
     Conviene pasar `nombre_piloto`: los números de auto pueden cambiar de piloto entre temporadas.
     """
     con = conectar()
     auto_actualizar(con)
-    año = desde_año or scraper.año_actual(con)
-    for y in sorted((s for s in scraper.temporadas(con) if hasta_año <= s <= año), reverse=True):
+    for y in sorted((s for s in scraper.temporadas(con) if s >= PRIMERA_TEMPORADA), reverse=True):
         for carrera in scraper.carreras(con, y):
             encontradas = _sanciones_del_piloto(con, carrera, int(numero_auto), nombre_piloto, False)
             if encontradas:

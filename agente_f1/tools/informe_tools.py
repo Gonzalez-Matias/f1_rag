@@ -4,17 +4,18 @@ from pydantic import BaseModel, Field
 
 from ..informe import datos as informe_datos
 from ..informe import render
-from ._util import seguro
+from ..util import seguro
 
 
 class Ficha(BaseModel):
     """Textos en lenguaje simple de una sanción. Los datos oficiales los completa la tool."""
-    documento: str = Field(description='Número de documento de la decisión de la FIA, ej. "41".')
+    documento: str = Field(description='Número de documento de la decisión de la FIA, ej. "41". Para una sanción '
+                                       'de "solo_en_race_control", su referencia, ej. "RC-3".')
     motivo_corto: str = Field(description='Qué pasó en 3 a 6 palabras, ej. "retrocedió en el pit lane".')
     que_paso: str = Field(description="Qué pasó, en una o dos oraciones simples.")
     regla_simple: str = Field(description="Qué dice la regla aplicada, explicada con tus palabras.")
     por_que: str = Field(description="Por qué correspondía esta sanción y no otra.")
-    cita: str | None = Field(default=None, description='Artículo a mostrar, ej. "B1.6.3b". Por defecto, el primero que cita la decisión.')
+    cita: str | None = Field(default=None, description='Artículo a mostrar, ej. "B1.6.3b". Por defecto, el primero que cita la decisión. En una sanción de Race Control, la regla relacionada que encontraste.')
 
 
 class Termino(BaseModel):
@@ -28,10 +29,10 @@ def generar_informe(año: int, carrera: str, fichas: list[Ficha], glosario: list
                     titulo: str | None = None) -> dict:
     """Genera el informe de sanciones (PDF y HTML) con una ficha por sanción.
 
-    Usala cuando el usuario pida un informe, después de tener las decisiones y los
-    artículos del reglamento. Vos escribís solo los textos en simple de cada ficha;
-    la decisión, el artículo, la fecha, el link y el texto del reglamento los completa
-    la tool desde las fuentes oficiales.
+    Usala después de tener las decisiones y los artículos del reglamento. Vos escribís solo
+    los textos en simple de cada ficha; la decisión, el artículo, la fecha, el link y el texto
+    del reglamento los completa la tool desde las fuentes oficiales. Una sanción sin documento
+    de la FIA va con su referencia de Race Control y queda marcada como tal.
 
     Args:
         año: temporada.

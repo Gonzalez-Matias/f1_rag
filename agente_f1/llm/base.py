@@ -49,10 +49,6 @@ class LLMProvider(ABC):
             return self._api_key
         return os.getenv(self.env_api_key, "") if self.env_api_key else ""
 
-    @property
-    def necesita_clave(self) -> bool:
-        return self.env_api_key is not None
-
     def disponible(self) -> bool:
         return self.local or bool(self.api_key)
 

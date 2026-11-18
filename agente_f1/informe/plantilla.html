@@ -23,8 +23,8 @@
   }
   @page {
     size: A4; margin: 16mm 14mm 18mm 14mm;
-    @bottom-left  { content: "Pit Wall Agent · Informe de sanciones · {{ gp.nombre }}"; font: 500 7.5pt Barlow; color: #8b8d98; }
-    @bottom-right { content: counter(page) " / " counter(pages); font: 700 7.5pt 'JetBrains Mono'; color: #8b8d98; }
+    @bottom-left  { content: "Pit Wall Agent · Informe de sanciones · {{ gp.nombre }}"; font: 500 7.5pt Barlow, sans-serif; color: #8b8d98; }
+    @bottom-right { content: counter(page) " / " counter(pages); font: 700 7.5pt 'JetBrains Mono', monospace; color: #8b8d98; }
   }
   @page :first { margin-top: 0; }
   * { box-sizing: border-box; }
@@ -32,26 +32,26 @@
 
   /* ---------- portada ---------- */
   .portada { background: var(--tinta); color: #fff; margin: 0 -14mm; padding: 14mm 14mm 9mm; }
-  .sobre { font: 600 8pt Barlow; letter-spacing: .18em; text-transform: uppercase; color: #a3a5b0; }
-  h1 { font: italic 800 32pt/1 'Barlow Condensed'; margin: 3mm 0 2mm; }
+  .sobre { font: 600 8pt Barlow, sans-serif; letter-spacing: .18em; text-transform: uppercase; color: #a3a5b0; }
+  h1 { font: italic 800 32pt/1 'Barlow Condensed', sans-serif; margin: 3mm 0 2mm; }
   .meta { color: #c9cad3; font-size: 10pt; }
   .cuadros { display: flex; gap: 3mm; margin-top: 7mm; }
   .cuadro { flex: 1; background: #1f2029; border-radius: 2mm; padding: 3mm 4mm; }
-  .cuadro b { display: block; font: 700 22pt/1 'JetBrains Mono'; color: #fff; }
+  .cuadro b { display: block; font: 700 22pt/1 'JetBrains Mono', monospace; color: #fff; }
   .cuadro span { font-size: 8pt; color: #a3a5b0; }
   .cuadro.total b { color: var(--rojo); }
 
-  h2 { font: italic 700 15pt 'Barlow Condensed'; margin: 7mm 0 2.5mm; text-transform: uppercase; letter-spacing: .02em; }
+  h2 { font: italic 700 15pt 'Barlow Condensed', sans-serif; margin: 7mm 0 2.5mm; text-transform: uppercase; letter-spacing: .02em; }
 
   /* ---------- torre de tiempos (resumen) ---------- */
   table.torre { width: 100%; border-collapse: collapse; }
   .torre td { padding: 1.6mm 2mm; border-bottom: 1px solid var(--linea); vertical-align: middle; }
   .torre tr:nth-child(even) td { background: var(--suave); }
   .num { display: inline-block; min-width: 9mm; text-align: center; border-radius: 1.2mm;
-         font: 700 9pt 'JetBrains Mono'; color: #fff; padding: .6mm 1.2mm; }
-  .codigo { font: 700 9pt 'JetBrains Mono'; letter-spacing: .05em; }
+         font: 700 9pt 'JetBrains Mono', monospace; color: #fff; padding: .6mm 1.2mm; }
+  .codigo { font: 700 9pt 'JetBrains Mono', monospace; letter-spacing: .05em; }
   .sesion { color: var(--gris); font-size: 8.5pt; }
-  .pen { font: 700 9pt 'JetBrains Mono'; color: var(--rojo); text-align: right; white-space: nowrap; }
+  .pen { font: 700 9pt 'JetBrains Mono', monospace; color: var(--rojo); text-align: right; white-space: nowrap; }
   .pen.leve { color: var(--gris); }
 
   /* ---------- fichas ---------- */
@@ -59,16 +59,16 @@
   .ficha-cab { display: flex; align-items: center; gap: 3.5mm; padding: 3mm 4mm; background: var(--suave); }
   .ficha-cab .num { font-size: 13pt; min-width: 13mm; padding: 1.2mm 2mm; }
   .quien { flex: 1; }
-  .quien b { font: italic 700 14pt/1.1 'Barlow Condensed'; display: block; }
+  .quien b { font: italic 700 14pt/1.1 'Barlow Condensed', sans-serif; display: block; }
   .quien span { color: var(--gris); font-size: 8.5pt; }
-  .insignia { font: 700 12pt 'JetBrains Mono'; color: #fff; background: var(--rojo); border-radius: 1.5mm; padding: 1.5mm 3mm; white-space: nowrap; }
+  .insignia { font: 700 12pt 'JetBrains Mono', monospace; color: #fff; background: var(--rojo); border-radius: 1.5mm; padding: 1.5mm 3mm; white-space: nowrap; }
   .insignia.leve { background: var(--tinta); }
   .ficha-cuerpo { padding: 3.5mm 4mm 2mm; }
   .bloque { margin-bottom: 3mm; }
-  .bloque h3 { font: 700 7.5pt Barlow; letter-spacing: .14em; text-transform: uppercase; color: var(--gris); margin: 0 0 1mm; }
+  .bloque h3 { font: 700 7.5pt Barlow, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--gris); margin: 0 0 1mm; }
   .bloque p { margin: 0; }
   .regla { border-radius: 1.5mm; background: #fff5f4; padding: 2.5mm 3.5mm; }
-  .cita { font: 700 9pt 'JetBrains Mono'; color: var(--rojo); }
+  .cita { font: 700 9pt 'JetBrains Mono', monospace; color: var(--rojo); }
   .reglamento { color: var(--gris); font-size: 7.5pt; }
   .original { font-style: italic; color: var(--gris); font-size: 8pt; margin-top: 1.2mm; }
   .ficha-pie { border-top: 1px solid var(--linea); padding: 2mm 4mm; font-size: 8pt; color: var(--gris); display: flex; justify-content: space-between; }
@@ -77,9 +77,29 @@
   /* ---------- glosario ---------- */
   dl.glosario { columns: 2; column-gap: 8mm; }
   dl.glosario div { break-inside: avoid; margin-bottom: 2.5mm; }
-  dt { font: italic 700 10.5pt 'Barlow Condensed'; }
+  dt { font: italic 700 10.5pt 'Barlow Condensed', sans-serif; }
   dd { margin: 0; color: #3a3b45; }
   .nota { color: var(--gris); font-size: 8pt; margin-top: 6mm; border-top: 1px solid var(--linea); padding-top: 2mm; }
+</style>
+<base target="_blank">
+<!-- Vista en pantalla (chat y HTML descargado). WeasyPrint la ignora: el PDF usa lo de arriba. -->
+<style media="screen">
+  :root { --rojo: #d92d23; }
+  html, body { background: #fff; }
+  body { zoom: 1.14; max-width: 210mm; margin: 0 auto; padding: 0 1px 1px; overflow: hidden; }
+  .portada { background: #f5f6f8; color: var(--tinta); margin: 0; padding: 5mm 6mm; border-radius: 2.5mm;
+             border-left: 1.6mm solid var(--rojo); }
+  .sobre { color: var(--gris); }
+  h1 { font-size: 22pt; margin: 1.5mm 0 1mm; }
+  .meta { font-size: 9pt; color: #3a3b45; }
+  .cuadros { margin-top: 4mm; }
+  .cuadro { background: #fff; border: 1px solid var(--linea); padding: 2.2mm 3.5mm; }
+  .cuadro b { font-size: 17pt; color: var(--tinta); }
+  .cuadro span { color: var(--gris); }
+  .cuadro.total b { color: var(--rojo); }
+  h2 { margin: 6mm 0 2mm; }
+  .ficha-pie a { color: var(--rojo); }
+  @media (max-width: 640px) { dl.glosario { columns: 1; } .cuadros { flex-wrap: wrap; } }
 </style>
 </head>
 <body>
@@ -89,7 +109,7 @@
   <h1>{{ gp.nombre }}</h1>
   <div class="meta">{% if gp.circuito %}{{ gp.circuito }} · {% endif %}{% if gp.fechas %}{{ gp.fechas }} · {% endif %}generado el {{ generado }}</div>
   <div class="cuadros">
-    <div class="cuadro total"><b>{{ sanciones|length }}</b><span>sanciones</span></div>
+    <div class="cuadro total"><b>{{ fichas|length }}</b><span>sanciones</span></div>
     {% for tipo, n in resumen %}
     <div class="cuadro"><b>{{ n }}</b><span>{{ tipo }}</span></div>
     {% endfor %}
@@ -98,7 +118,7 @@
 
 <h2>Resumen</h2>
 <table class="torre">
-  {% for s in sanciones %}
+  {% for s in fichas %}
   <tr>
     <td style="width:12mm"><span class="num" style="background:#{{ s.color }}">{{ s.auto }}</span></td>
     <td style="width:12mm" class="codigo">{{ s.codigo }}</td>
@@ -120,7 +140,7 @@
   <div class="ficha-cuerpo">
     <div class="bloque"><h3>Qué pasó</h3><p>{{ s.que_paso }}</p></div>
     <div class="bloque regla">
-      {% if s.cita %}<span class="cita">Art. {{ s.cita }}</span>{% endif %}
+      {% if s.cita %}<span class="cita">{% if not s.url %}Regla relacionada: {% endif %}Art. {{ s.cita }}</span>{% endif %}
       {% if s.reglamento %}<span class="reglamento">· {{ s.reglamento }}</span>{% endif %}
       <p>{{ s.regla_simple }}</p>
       {% if s.regla_original %}<p class="original">“{{ s.regla_original }}”</p>{% endif %}
@@ -128,8 +148,13 @@
     <div class="bloque"><h3>Por qué esta sanción</h3><p>{{ s.por_que }}</p></div>
   </div>
   <div class="ficha-pie">
-    <span>Decisión de los comisarios · Doc {{ s.doc }} · {{ s.fecha }}</span>
+    {% if s.url %}
+    <span>Decisión de los comisarios · Doc {{ s.doc }} · {{ s.fecha }}{% if s.vuelta %} · anunciada en la vuelta {{ s.vuelta }}{% endif %}</span>
     <a href="{{ s.url }}">Ver documento oficial →</a>
+    {% else %}
+    <span>Anunciada por Race Control{% if s.vuelta %} · vuelta {{ s.vuelta }}{% endif %} · {{ s.fecha }}</span>
+    <span>Sin documento de la FIA</span>
+    {% endif %}
   </div>
 </article>
 {% endfor %}
@@ -143,7 +168,7 @@
 </dl>
 {% endif %}
 
-<p class="nota">Fuentes: documentos de decisión de los comisarios de la FIA{% if gp.reglamento %} y {{ gp.reglamento }}{% endif %}.
+<p class="nota">Fuentes: documentos de decisión de los comisarios de la FIA{% if gp.usa_race_control %}, mensajes de Race Control (OpenF1){% endif %}{% if gp.reglamento %} y {{ gp.reglamento }}{% endif %}.
 Las explicaciones en lenguaje simple son de Pit Wall Agent y no reemplazan al texto oficial.</p>
 </body>
 </html>

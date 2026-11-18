@@ -1,0 +1,101 @@
+/* Estilos de la UI (app.py). El tema base está en .streamlit/config.toml. */
+.block-container {padding-top: 1.4rem; max-width: 980px;}
+
+/* ---------- barra lateral ---------- */
+.pw-logo {display: block; width: 100%; max-width: 225px; height: auto; margin: 0 0 .6rem;}
+.pw-sobre {font: 600 .68rem 'Barlow', sans-serif; letter-spacing: .16em; text-transform: uppercase;
+           color: #6b6d78;}
+.pw-seccion {font: 600 .66rem 'Barlow', sans-serif; letter-spacing: .18em; text-transform: uppercase;
+             color: #6b6d78; margin: .9rem 0 0; padding-bottom: .4rem; border-bottom: 1px solid #e3e4ea;}
+section[data-testid="stSidebar"] button > div {justify-content: flex-start;}
+section[data-testid="stSidebar"] button p {text-align: left; width: 100%; white-space: nowrap;
+                                            overflow: hidden; text-overflow: ellipsis;}
+/* cada conversación es una caja: título y menú de tres puntos; la abierta lleva la marca roja */
+[class*="st-key-fila-"] {border-left: 3px solid transparent; border-radius: 0 .35rem .35rem 0; flex-wrap: nowrap;}
+[class*="st-key-fila-"]:hover {background: #e9eaee;}
+[class*="st-key-fila-on-"], [class*="st-key-fila-on-"]:hover {border-left-color: #d92d23; background: #ffffff;}
+[class*="st-key-fila-"] > div:first-child {flex: 1 1 0; min-width: 0;}
+section[data-testid="stSidebar"] [class*="st-key-fila-"] button[kind="secondary"],
+section[data-testid="stSidebar"] [class*="st-key-fila-"] button[kind="tertiary"],
+section[data-testid="stSidebar"] [class*="st-key-informes-conv"] button {
+    border: 0; background: transparent; min-height: 2rem; padding: .3rem .5rem; color: #3a3b45;}
+section[data-testid="stSidebar"] [class*="st-key-fila-on-"] button p {color: #14151c; font-weight: 600;}
+section[data-testid="stSidebar"] button:disabled {opacity: 1;}
+section[data-testid="stSidebar"] button[kind="secondary"]:disabled p {color: #8b8d98;}
+/* tres puntos, dentro de la caja */
+section[data-testid="stSidebar"] [class*="st-key-fila-"] [data-testid="stPopover"] {width: 1.8rem; flex: none;}
+section[data-testid="stSidebar"] [class*="st-key-fila-"] [data-testid="stPopover"] button {
+    width: 1.8rem; min-height: 1.8rem; padding: 0; color: #6b6d78;}
+section[data-testid="stSidebar"] [class*="st-key-fila-"] [data-testid="stPopover"] button > div {justify-content: center;}
+section[data-testid="stSidebar"] [class*="st-key-fila-"] [data-testid="stPopover"] button:hover {color: #14151c;}
+section[data-testid="stSidebar"] [class*="st-key-fila-"] [data-testid="stPopover"] button p {width: auto;}
+section[data-testid="stSidebar"] [class*="st-key-fila-"] [data-testid="stPopover"] button [data-testid="stIconMaterial"]:last-child:not(:first-child) {display: none;}
+[class*="st-key-borrar-"] button, [class*="st-key-borrar-"] button p {color: #d92d23;}
+/* informes: subsección de la conversación abierta */
+.st-key-informes-conv {margin: .15rem 0 .45rem .85rem; padding-left: .45rem; border-left: 1px solid #d5d6dd; width: auto;}
+.st-key-informes-conv [data-testid="stMarkdown"], .st-key-informes-conv [data-testid="stMarkdownContainer"] {margin-bottom: 0;}
+.pw-subseccion {font: 600 .6rem 'Barlow', sans-serif; letter-spacing: .16em; text-transform: uppercase;
+                color: #6b6d78; padding: .2rem .5rem .1rem;}
+section[data-testid="stSidebar"] .st-key-informes-conv button {min-height: 1.75rem; padding: .2rem .5rem;}
+section[data-testid="stSidebar"] .st-key-informes-conv button:hover:not(:disabled) {background: #e9eaee; color: #14151c;}
+section[data-testid="stSidebar"] .st-key-informes-conv button p {font-size: .84rem;}
+
+/* ---------- encabezado ---------- */
+h1, h2, h3 {font-style: italic !important;}
+h2, h3 {text-transform: uppercase; letter-spacing: .02em;}
+.pw-conv {font: italic 700 1.35rem/1.1 'Barlow Condensed', sans-serif; margin: .2rem 0 0;}
+.pw-meta {color: #6b6d78; font: 500 .74rem 'JetBrains Mono', monospace;}
+
+/* ---------- portada ---------- */
+.pw-portada {position: relative; overflow: hidden; background: #f5f6f8; color: #14151c; border-radius: .6rem;
+             padding: 1.7rem 1.9rem 0; margin: .5rem 0 1.4rem;}
+.pw-portada::before {content: ""; position: absolute; inset: 0 auto 0 0; width: 6px; background: #d92d23;}
+.pw-portada h1 {font: italic 800 2.7rem/1 'Barlow Condensed', sans-serif; color: #14151c; margin: .45rem 0 .6rem; padding: 0;}
+.pw-portada p {color: #3a3b45; margin: 0; max-width: 40rem;}
+.pw-pasos {display: grid; grid-template-columns: repeat(3, 1fr); margin: 1.5rem -1.9rem 0; border-top: 1px solid #e3e4ea;}
+.pw-paso {padding: .9rem 1.2rem .95rem 1.9rem; border-right: 1px solid #e3e4ea;}
+.pw-paso:last-child {border-right: 0;}
+.pw-paso b {display: block; font: 700 .7rem 'JetBrains Mono', monospace; color: #d92d23; letter-spacing: .08em;}
+.pw-paso span {display: block; font: 600 .98rem 'Barlow', sans-serif; color: #14151c; margin: .15rem 0 .1rem;}
+.pw-paso small {color: #6b6d78; font-size: .8rem;}
+.pw-ejemplo {font: 600 .64rem 'Barlow', sans-serif; letter-spacing: .16em; text-transform: uppercase;
+             color: #d92d23; margin: 0 0 .3rem .1rem;}
+.stMainBlockContainer div[data-testid="stButton"] button p {white-space: normal; text-align: left;}
+@media (max-width: 720px) {
+    .pw-pasos {grid-template-columns: 1fr;}
+    .pw-paso {border-right: 0; border-bottom: 1px solid #e3e4ea;}
+    .pw-portada h1 {font-size: 2.1rem;}
+}
+
+/* ---------- mensajes: sin avatares; la pregunta va a la derecha, como una burbuja ---------- */
+div[data-testid="stChatMessage"] {padding: .2rem 0; gap: 0; background: transparent;}
+div[data-testid="stChatMessage"] > div:first-child:not([data-testid="stChatMessageContent"]) {display: none;}
+div[data-testid="stChatMessageAvatarUser"], div[data-testid="stChatMessageAvatarAssistant"] {display: none;}
+div[data-testid="stChatMessage"]:has(.pw-pregunta) {
+    background: #f0f1f4; border-radius: .7rem .7rem .15rem .7rem; padding: .65rem 1rem; margin: 1rem 0 .6rem auto;
+    width: fit-content; max-width: 78%;}
+.pw-pregunta {margin: 0; color: #14151c;}
+.pw-interrumpida {color: #6b6d78; font-style: italic; border-left: 3px solid #d5d6dd; padding-left: .7rem;}
+code {font-weight: 700;}
+
+/* ---------- bloque "Razonamiento" ---------- */
+div[data-testid="stExpander"] summary p, div[data-testid="stStatusWidget"] summary p {
+    font: 700 .72rem 'Barlow', sans-serif !important; letter-spacing: .14em; text-transform: uppercase; color: #6b6d78;}
+.pw-razon {color: #6b6d78; font-style: italic;}
+.pw-actividad {font: 500 .74rem 'JetBrains Mono', monospace; color: #6b6d78; margin: .1rem 0 0 .2rem;}
+.pw-tool {display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; margin: .8rem 0 .25rem;}
+.pw-tool b {font: 700 .85rem 'JetBrains Mono', monospace; color: #14151c;}
+.pw-tool span {font: 500 .78rem 'JetBrains Mono', monospace; color: #6b6d78;}
+.pw-fuente {font: 700 .6rem 'Barlow', sans-serif; letter-spacing: .12em; text-transform: uppercase;
+            border-radius: .2rem; padding: .12rem .4rem; color: #14151c; background: #e3e4ea;}
+.pw-fuente.fia {background: #d92d23; color: #fff;}
+.pw-fuente.openf1 {background: #14151c; color: #fff;}
+.pw-fuente.mixta {background: linear-gradient(90deg, #14151c 50%, #d92d23 50%); color: #fff;}
+.pw-fuente.local {background: transparent; color: #5f616d; box-shadow: inset 0 0 0 1px #c9cad3;}
+
+/* ---------- informe ---------- */
+.pw-informe {display: flex; align-items: baseline; gap: .7rem; margin: .2rem 0 .1rem;}
+.pw-informe b {font: italic 700 1.15rem/1.1 'Barlow Condensed', sans-serif; color: #14151c;}
+.st-key-pw-acciones {margin-top: .4rem;}
+.st-key-pw-detener button {border-color: #d92d23; color: #d92d23;}
+iframe {border-radius: .4rem;}

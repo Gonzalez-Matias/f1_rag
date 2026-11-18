@@ -1,13 +1,15 @@
-"""UI "Pit Wall Agent" en Streamlit (mismo estilo que el informe PDF).
+"""UI "Pit Wall Agent" en Streamlit (estilos en static/app.css).
 
-- Barra lateral: logo, nueva conversación, conversaciones guardadas e informes generados.
+- Barra lateral: logo, nueva conversación y conversaciones guardadas. Cada una tiene un menú
+  (tres puntos) para eliminarla, y la abierta muestra sus informes como subsección.
 - Arriba a la derecha: el modelo. El usuario elige proveedor y modelo y puede traer su
   propia clave: se guarda solo en la sesión del navegador, nunca en disco.
 - Centro: el chat. Cada respuesta tiene un bloque desplegable "Razonamiento" con todo
   el proceso en orden (razonamiento del modelo y cada tool, con su fuente, argumentos y
   resultado en JSON). Afuera del bloque queda solo la respuesta final.
 - Informe: cuando el agente explica sanciones de una carrera, el informe (una ficha por
-  sanción) es la respuesta: se ve en el chat, sin texto antes, y se descarga en PDF o HTML. Los informes anteriores quedan en la barra lateral.
+  sanción) es la respuesta: se ve en el chat, sin texto antes, y se descarga en PDF o HTML. Los informes quedan en la barra lateral,
+  debajo de su conversación.
 - Mientras el agente responde no se puede enviar otro mensaje: hay un botón "Detener".
 
 Las conversaciones se guardan en data/conversaciones.sqlite (checkpointer de LangGraph):
@@ -33,92 +35,8 @@ from agente_f1.util import parse_json
 
 st.set_page_config(page_title="Pit Wall Agent", layout="wide")
 
-st.markdown("""
-<style>
-  .block-container {padding-top: 1.4rem; max-width: 980px;}
-
-  /* ---------- barra lateral ---------- */
-  .pw-logo {font: italic 800 1.55rem/1 'Barlow Condensed', sans-serif; color: #fff;
-            border-left: 6px solid #e8433a; padding: .15rem 0 .15rem .6rem; margin-bottom: .35rem;}
-  .pw-sobre {font: 600 .68rem 'Barlow', sans-serif; letter-spacing: .16em; text-transform: uppercase;
-             color: #a3a5b0;}
-  .pw-seccion {font: 600 .66rem 'Barlow', sans-serif; letter-spacing: .18em; text-transform: uppercase;
-               color: #6f7180; margin: .9rem 0 0; padding-bottom: .4rem; border-bottom: 1px solid #23242e;}
-  section[data-testid="stSidebar"] button > div {justify-content: flex-start;}
-  section[data-testid="stSidebar"] button p {text-align: left; width: 100%; white-space: nowrap;
-                                              overflow: hidden; text-overflow: ellipsis;}
-  /* conversaciones e informes: lista plana; la activa lleva la marca roja, como una posición en la torre */
-  section[data-testid="stSidebar"] button[kind="secondary"],
-  section[data-testid="stSidebar"] button[kind="tertiary"] {
-      border: 0; border-left: 3px solid transparent; border-radius: 0 .35rem .35rem 0; background: transparent;
-      min-height: 2rem; padding: .3rem .6rem; color: #b9bbc6;}
-  section[data-testid="stSidebar"] button[kind="secondary"]:hover:not(:disabled) {background: #1a1b23; color: #fff;}
-  section[data-testid="stSidebar"] button[kind="tertiary"] {border-left-color: #e8433a; background: #1a1b23;}
-  section[data-testid="stSidebar"] button[kind="tertiary"] p {color: #fff; font-weight: 600;}
-  section[data-testid="stSidebar"] button:disabled {opacity: 1;}
-  section[data-testid="stSidebar"] button[kind="secondary"]:disabled p {color: #6f7180;}
-
-  /* ---------- encabezado ---------- */
-  h1, h2, h3 {font-style: italic !important;}
-  h2, h3 {text-transform: uppercase; letter-spacing: .02em;}
-  .pw-conv {font: italic 700 1.35rem/1.1 'Barlow Condensed', sans-serif; margin: .2rem 0 0;}
-  .pw-meta {color: #8b8d98; font: 500 .74rem 'JetBrains Mono', monospace;}
-
-  /* ---------- portada ---------- */
-  .pw-portada {position: relative; overflow: hidden; background: #1f2029; color: #fff; border-radius: .6rem;
-               padding: 1.7rem 1.9rem 0; margin: .5rem 0 1.4rem;}
-  .pw-portada::before {content: ""; position: absolute; inset: 0 auto 0 0; width: 6px; background: #e8433a;}
-  .pw-portada h1 {font: italic 800 2.7rem/1 'Barlow Condensed', sans-serif; color: #fff; margin: .45rem 0 .6rem; padding: 0;}
-  .pw-portada p {color: #c9cad3; margin: 0; max-width: 40rem;}
-  .pw-pasos {display: grid; grid-template-columns: repeat(3, 1fr); margin: 1.5rem -1.9rem 0; border-top: 1px solid #2f303c;}
-  .pw-paso {padding: .9rem 1.2rem .95rem 1.9rem; border-right: 1px solid #2f303c;}
-  .pw-paso:last-child {border-right: 0;}
-  .pw-paso b {display: block; font: 700 .7rem 'JetBrains Mono', monospace; color: #ff6b61; letter-spacing: .08em;}
-  .pw-paso span {display: block; font: 600 .98rem 'Barlow', sans-serif; color: #fff; margin: .15rem 0 .1rem;}
-  .pw-paso small {color: #9c9eaa; font-size: .8rem;}
-  .pw-ejemplo {font: 600 .64rem 'Barlow', sans-serif; letter-spacing: .16em; text-transform: uppercase;
-               color: #ff6b61; margin: 0 0 .3rem .1rem;}
-  .stMainBlockContainer div[data-testid="stButton"] button p {white-space: normal; text-align: left;}
-  @media (max-width: 720px) {
-      .pw-pasos {grid-template-columns: 1fr;}
-      .pw-paso {border-right: 0; border-bottom: 1px solid #2f303c;}
-      .pw-portada h1 {font-size: 2.1rem;}
-  }
-
-  /* ---------- mensajes: sin avatares; la pregunta va a la derecha, como una burbuja ---------- */
-  div[data-testid="stChatMessage"] {padding: .2rem 0; gap: 0; background: transparent;}
-  div[data-testid="stChatMessage"] > div:first-child:not([data-testid="stChatMessageContent"]) {display: none;}
-  div[data-testid="stChatMessageAvatarUser"], div[data-testid="stChatMessageAvatarAssistant"] {display: none;}
-  div[data-testid="stChatMessage"]:has(.pw-pregunta) {
-      background: #1f2029; border-radius: .7rem .7rem .15rem .7rem; padding: .65rem 1rem; margin: 1rem 0 .6rem auto;
-      width: fit-content; max-width: 78%;}
-  .pw-pregunta {margin: 0; color: #fff;}
-  .pw-interrumpida {color: #8b8d98; font-style: italic; border-left: 3px solid #3a3b47; padding-left: .7rem;}
-  code {font-weight: 700;}
-
-  /* ---------- bloque "Razonamiento" ---------- */
-  div[data-testid="stExpander"] summary p, div[data-testid="stStatusWidget"] summary p {
-      font: 700 .72rem 'Barlow', sans-serif !important; letter-spacing: .14em; text-transform: uppercase; color: #a3a5b0;}
-  .pw-razon {color: #a3a5b0; font-style: italic;}
-  .pw-actividad {font: 500 .74rem 'JetBrains Mono', monospace; color: #8b8d98; margin: .1rem 0 0 .2rem;}
-  .pw-tool {display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; margin: .8rem 0 .25rem;}
-  .pw-tool b {font: 700 .85rem 'JetBrains Mono', monospace; color: #fff;}
-  .pw-tool span {font: 500 .78rem 'JetBrains Mono', monospace; color: #8b8d98;}
-  .pw-fuente {font: 700 .6rem 'Barlow', sans-serif; letter-spacing: .12em; text-transform: uppercase;
-              border-radius: .2rem; padding: .12rem .4rem; color: #14151c; background: #a3a5b0;}
-  .pw-fuente.fia {background: #e8433a; color: #fff;}
-  .pw-fuente.openf1 {background: #e6e6ea;}
-  .pw-fuente.mixta {background: linear-gradient(90deg, #e6e6ea 50%, #e8433a 50%); color: #14151c;}
-  .pw-fuente.local {background: transparent; color: #a3a5b0; box-shadow: inset 0 0 0 1px #4a4b58;}
-
-  /* ---------- informe ---------- */
-  .pw-informe {display: flex; align-items: baseline; gap: .7rem; margin: .2rem 0 .1rem;}
-  .pw-informe b {font: italic 700 1.15rem/1.1 'Barlow Condensed', sans-serif; color: #fff;}
-  .st-key-pw-acciones {margin-top: .4rem;}
-  .st-key-pw-detener button {border-color: #e8433a; color: #ff6b61;}
-  iframe {border-radius: .4rem;}
-</style>
-""", unsafe_allow_html=True)
+st.markdown(f"<style>\n{(config.ROOT / 'static' / 'app.css').read_text(encoding='utf-8')}\n</style>",
+            unsafe_allow_html=True)
 
 EJEMPLOS = [
     ("Un piloto en una carrera", "¿Por qué sancionaron a Bearman en São Paulo 2026?"),
@@ -126,9 +44,9 @@ EJEMPLOS = [
     ("Carrera completa", "¿Quiénes fueron sancionados en la quinta carrera de 2025?"),
 ]
 PEDIR_INFORME = "Armame el informe en PDF de las sanciones que acabás de explicar."
-INFORMES_EN_BARRA = 6
 
 # Fuente de cada tool, para la etiqueta del bloque "Razonamiento": (texto, clase CSS)
+TOOLS_CONJUNTAS = {"sanciones_de_piloto_completo", "sanciones_de_carrera_completo", "ultimas_sanciones_de_piloto_completo"}
 FUENTE_LOCAL = {"buscar_en_reglamento": "Reglamento", "generar_informe": "Informe"}
 
 
@@ -137,7 +55,7 @@ def fuente_de(tool: str) -> tuple[str, str]:
         return "FIA", "fia"
     if tool.startswith("openf1_"):
         return "OpenF1", "openf1"
-    if tool.startswith("sanciones_"):
+    if tool in TOOLS_CONJUNTAS:
         return "OpenF1 + FIA", "mixta"
     return FUENTE_LOCAL.get(tool, "Tool"), "local"
 
@@ -155,6 +73,12 @@ def abrir(thread_id: str):
     conv = conversaciones.obtener(thread_id)
     if conv and conv["proveedor"] in PROVEEDORES:
         st.session_state.modelo["proveedor"] = conv["proveedor"]  # cada conversación sigue con su proveedor
+
+
+def eliminar(thread_id: str):
+    conversaciones.borrar(thread_id)
+    if thread_id == st.session_state.thread_id:
+        nueva_conversacion()
 
 
 def preguntar(texto: str):
@@ -215,30 +139,18 @@ def agente_de_la_sesion(provider):
 
 # ---------------------------------------------------------------- informes
 
-def render_descargas(ruta_html: Path, ruta_pdf: Path | None, clave: str):
-    columnas = st.columns([1.3, 1.3, 3])
-    if ruta_pdf and ruta_pdf.exists():
-        columnas[0].download_button("Descargar PDF", ruta_pdf.read_bytes(), file_name=ruta_pdf.name,
-                                    mime="application/pdf", key=f"dl-{clave}-pdf", type="primary",
-                                    use_container_width=True)
-    columnas[1].download_button("Descargar HTML", ruta_html.read_bytes(), file_name=ruta_html.name,
-                                mime="text/html", key=f"dl-{clave}-html", use_container_width=True)
+def render_informe(ruta_html: Path, ruta_pdf: Path | None, clave: str):
+    """El informe en pantalla y, debajo, sus descargas (los archivos se leen recién al descargar).
 
-
-def render_informe(ruta_html: Path, ruta_pdf: Path | None, clave: str, en_chat: bool = False):
-    """El informe en pantalla y sus descargas.
-
-    En el chat es parte de la respuesta: va entero, con los colores de la app, y las descargas
-    al final. En la lista de informes se ve como la hoja del PDF, con las descargas arriba.
     El HTML sale de nuestra plantilla (Jinja con autoescape): los textos del modelo van escapados.
     """
-    contenido = ruta_html.read_text(encoding="utf-8")
-    if en_chat:
-        st.iframe(informe_render.vista_previa(contenido, modo="chat"), height="content")
-        render_descargas(ruta_html, ruta_pdf, clave)
-    else:
-        render_descargas(ruta_html, ruta_pdf, clave)
-        st.iframe(informe_render.vista_previa(contenido), height=620)
+    st.iframe(informe_render.vista_previa(ruta_html.read_text(encoding="utf-8")), height="content")
+    columnas = st.columns([1.3, 1.3, 3])
+    if ruta_pdf and ruta_pdf.exists():
+        columnas[0].download_button("Descargar PDF", ruta_pdf.read_bytes, file_name=ruta_pdf.name,
+                                    mime="application/pdf", key=f"dl-{clave}-pdf", type="primary", width="stretch")
+    columnas[1].download_button("Descargar HTML", ruta_html.read_bytes, file_name=ruta_html.name,
+                                mime="text/html", key=f"dl-{clave}-html", width="stretch")
 
 
 @st.dialog("Informe de sanciones", width="large")
@@ -265,7 +177,8 @@ def hay_decisiones(eventos: list[dict]) -> bool:
     """El turno trajo decisiones de la FIA (hay material para un informe)."""
     for ev in eventos:
         tool, resultado = ev.get("tool", ""), ev.get("resultado")
-        if tool.startswith("sanciones_") and isinstance(resultado, dict) and resultado.get("decisiones_fia"):
+        if tool in TOOLS_CONJUNTAS and isinstance(resultado, dict) and any(
+                resultado.get(k) for k in ("decisiones_fia", "sanciones_en_pista")):
             return True
         if tool.startswith("fia_") and resultado and not (isinstance(resultado, dict) and
                                                          ("error" in resultado or "resultado" in resultado)):
@@ -276,7 +189,7 @@ def hay_decisiones(eventos: list[dict]) -> bool:
 # ---------------------------------------------------------------- barra lateral
 
 with st.sidebar:
-    st.markdown('<div class="pw-logo">Pit Wall Agent</div>'
+    st.markdown('<img class="pw-logo" src="app/static/logo.png" alt="Pit Wall Agent">'
                 '<div class="pw-sobre">Sanciones de F1 con el reglamento en la mano</div>',
                 unsafe_allow_html=True)
     st.write("")
@@ -287,30 +200,30 @@ with st.sidebar:
         st.markdown('<div class="pw-seccion">Conversaciones</div>', unsafe_allow_html=True)
     with st.container(gap=None):
         for conv in lista:
-            activa = conv["thread_id"] == st.session_state.thread_id
-            st.button(conv["titulo"], key=f"conv-{conv['thread_id']}", use_container_width=True,
-                      type="tertiary" if activa else "secondary", disabled=activa or ocupado,
-                      help=f"{conv['proveedor']} · {datetime.fromtimestamp(conv['actualizada']):%d/%m %H:%M}",
-                      on_click=abrir, args=(conv["thread_id"],))
-
-    informes = informe_render.listar(maximo=INFORMES_EN_BARRA)
-    if informes:
-        st.markdown('<div class="pw-seccion">Informes</div>', unsafe_allow_html=True)
-    with st.container(gap=None):
-        for inf in informes:
-            # "Gran Premio de São Paulo 2026 - ..." -> "São Paulo 2026 - ...": lo que distingue un informe de otro
-            corto = re.sub(r"^Gran Premio (?:de la |del |de )", "", inf["titulo"])
-            if st.button(f"{inf['generado']:%d/%m %H:%M} · {corto}", key=f"inf-{inf['html'].stem}",
-                         use_container_width=True, disabled=ocupado,
-                         help=f"{inf['titulo']} · generado el {inf['generado']:%d/%m/%Y a las %H:%M}"):
-                abrir_informe(inf)
-
-    if actual:
-        st.markdown('<div class="pw-seccion">Esta conversación</div>', unsafe_allow_html=True)
-        if st.button("Borrar conversación", use_container_width=True, disabled=ocupado):
-            conversaciones.borrar(st.session_state.thread_id)
-            nueva_conversacion()
-            st.rerun()
+            thread_id = conv["thread_id"]
+            activa = thread_id == st.session_state.thread_id
+            # La fila es la caja de la conversación: título y, adentro, el menú de los tres puntos.
+            with st.container(key=f"fila-{'on-' if activa else ''}{thread_id}", horizontal=True, gap=None,
+                              vertical_alignment="center"):
+                st.button(conv["titulo"], key=f"conv-{thread_id}", width="stretch",
+                          type="tertiary" if activa else "secondary", disabled=activa or ocupado,
+                          help=f"{conv['proveedor']} · {datetime.fromtimestamp(conv['actualizada']):%d/%m %H:%M}",
+                          on_click=abrir, args=(thread_id,))
+                with st.popover(":material/more_vert:", key=f"menu-{thread_id}", help="Opciones", disabled=ocupado):
+                    st.button("Eliminar conversación", key=f"borrar-{thread_id}", icon=":material/delete:",
+                              type="tertiary", on_click=eliminar, args=(thread_id,))
+            # Los informes son una subsección de su conversación: se ven debajo de la abierta.
+            informes = [informe_render.leer(r) for r in conversaciones.rutas_de_informes(thread_id)] if activa else []
+            if informes:
+                with st.container(key="informes-conv", gap=None):
+                    st.markdown('<div class="pw-subseccion">Informes</div>', unsafe_allow_html=True)
+                    for inf in informes:
+                        # "Gran Premio de São Paulo 2026 - ..." -> "São Paulo 2026 - ..."
+                        corto = re.sub(r"^Gran Premio (?:de la |del |de )", "", inf["titulo"])
+                        if st.button(corto, key=f"inf-{inf['html'].stem}", width="stretch", disabled=ocupado,
+                                     icon=":material/description:",
+                                     help=f"{inf['titulo']} · generado el {inf['generado']:%d/%m/%Y a las %H:%M}"):
+                            abrir_informe(inf)
 
 
 # ---------------------------------------------------------------- encabezado: conversación y modelo
@@ -414,8 +327,11 @@ def _resumen_resultado(resultado) -> str:
         if "error" in resultado:
             return "error"
         if "decisiones_fia" in resultado:
-            return (f"{len(resultado['decisiones_fia'])} decisiones · "
-                    f"{len(resultado.get('race_control_openf1') or [])} mensajes de Race Control")
+            return (f"{len(resultado['decisiones_fia'])} decisiones FIA · "
+                    f"{len(resultado.get('sanciones_en_pista') or [])} en Race Control · "
+                    f"{len(resultado.get('solo_en_race_control') or [])} sin documento")
+        if "sanciones" in resultado:
+            return f"{len(resultado['sanciones'])} sanciones · {len(resultado.get('banderas') or [])} banderas"
         if "mensajes" in resultado:
             return f"{len(resultado['mensajes'])} mensajes"
         if "archivos" in resultado:
@@ -457,7 +373,7 @@ def render_pregunta(texto: str):
 historial = conversaciones.turnos(agent, st.session_state.thread_id, provider) if actual else []
 if not historial and not ocupado:
     st.markdown(
-        '<div class="pw-portada"><div class="pw-sobre">Pit Wall Agent · Sanciones de F1</div>'
+        '<div class="pw-portada"><div class="pw-sobre">Sanciones de Fórmula 1</div>'
         '<h1>Preguntá por cualquier sanción</h1>'
         '<p>Te explico en simple por qué sancionaron a un piloto, con la decisión oficial de los '
         'comisarios y el artículo del reglamento que se aplicó.</p>'
@@ -488,7 +404,7 @@ for t, turno in enumerate(historial):
         # Si hay informe, el informe es la respuesta: va solo, con la descarga, y no se muestra
         # el texto del modelo (que en ese caso es apenas un "Informe listo.").
         for n, (ruta_html, ruta_pdf) in enumerate(generados):
-            render_informe(ruta_html, ruta_pdf, clave=f"{st.session_state.thread_id}-{t}-{n}", en_chat=True)
+            render_informe(ruta_html, ruta_pdf, clave=f"{st.session_state.thread_id}-{t}-{n}")
         # Si el modelo explicó sanciones sin armar el informe (ej. varias carreras), se puede
         # pedir desde acá: solo en la última respuesta.
         if t == len(historial) - 1 and not generados and not ocupado and hay_decisiones(turno["proceso"]):

@@ -7,7 +7,7 @@ así el informe no depende de que el modelo copie bien un dato.
 import re
 from datetime import datetime
 
-from ..fuentes import openf1
+from ..fuentes import openf1, sanciones
 from ..fuentes.fia import consultas
 from ..rag import store
 
@@ -15,6 +15,7 @@ SESIONES = {
     "free practice 1": "Práctica 1", "free practice 2": "Práctica 2", "free practice 3": "Práctica 3",
     "qualifying": "Clasificación", "sprint qualifying": "Clasificación sprint",
     "sprint shootout": "Clasificación sprint", "sprint": "Sprint", "race": "Carrera",
+    "reconnaissance laps": "Vueltas de reconocimiento",
 }
 MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
          "septiembre", "octubre", "noviembre", "diciembre"]
@@ -34,9 +35,9 @@ def etiqueta_sancion(decision: str | None) -> tuple[str, str, bool]:
     """
     d = (decision or "").lower()
     reglas = [
+        (r"stop\s*(?:/|&|-|and)?\s*go", lambda m: "Stop & Go", "de tiempo", False),
         (r"(\d+)[- ]second", lambda m: f"+{m.group(1)} s", "de tiempo", False),
         (r"drive[- ]through", lambda m: "Drive-through", "de tiempo", False),
-        (r"stop[- ]and[- ]go", lambda m: "Stop & Go", "de tiempo", False),
         (r"(\d+) grid (?:position|place)", lambda m: f"−{m.group(1)} grilla", "de grilla", False),
         (r"start(?:s)? (?:the race )?from the pit lane|pit lane start", lambda m: "Largada en pits", "de grilla", False),
         (r"disqualif", lambda m: "Descalificado", "descalificaciones", False),
@@ -97,11 +98,47 @@ def _texto_reglamento(año: int, cita: str | None) -> dict | None:
     if not cita or store.motivo_no_disponible():
         return None
     try:
-        encontrados = store.buscar(cita, año=año, cita=cita, k=1, min_similitud=1.1)
+        return store.parrafo_exacto(cita, año)
     except Exception:  # noqa: BLE001 - sin el texto del artículo el informe sale igual, con la decisión
         return None
-    exactos = [r for r in encontrados if r.get("coincidencia") == "exacta"]
-    return exactos[0] if exactos else None
+
+
+def _es_race_control(ficha: dict) -> bool:
+    return str(ficha["documento"]).strip().upper().startswith("RC-")
+
+
+def _sanciones_race_control(año: int, meeting: dict | None) -> dict[str, dict]:
+    """Referencia ("RC-3") -> sanción anunciada por Race Control en esa carrera."""
+    if not meeting:
+        return {}
+    try:
+        return {s["referencia"]: s for s in openf1.sanciones_en_pista(año, meeting["meeting_key"])["sanciones"]}
+    except Exception:  # noqa: BLE001 - las fichas con documento de la FIA salen igual
+        return {}
+
+
+def _ficha_race_control(f: dict, s: dict, pilotos: dict[int, dict], año: int) -> dict:
+    """Ficha de una sanción anunciada en pista que no tiene documento de la FIA."""
+    piloto = pilotos.get(s["numero_auto"]) or {}
+    etiqueta, tipo, leve = etiqueta_sancion(s["sancion"])
+    cita = f.get("cita")
+    parrafo = _texto_reglamento(año, cita)
+    try:
+        fecha = datetime.fromisoformat(s["fecha"]).strftime("%d/%m/%Y")
+    except (TypeError, ValueError):
+        fecha = ""
+    return {
+        "auto": s["numero_auto"], "codigo": s.get("piloto") or piloto.get("name_acronym") or "",
+        "color": piloto.get("team_colour") or GRIS,
+        "piloto": (piloto.get("full_name") or s.get("piloto") or "").title(),
+        "equipo": piloto.get("team_name") or "", "sesion": sesion_es(s.get("sesion")),
+        "etiqueta": etiqueta, "tipo": tipo, "leve": leve,
+        "motivo_corto": f.get("motivo_corto", ""), "que_paso": f.get("que_paso", ""),
+        "regla_simple": f.get("regla_simple", ""), "por_que": f.get("por_que", ""),
+        "cita": cita, "reglamento": parrafo["reglamento"] if parrafo else None,
+        "regla_original": recortar(parrafo["texto"]) if parrafo else None,
+        "doc": None, "fecha": fecha, "url": None, "vuelta": s.get("vuelta"),
+    }
 
 
 def armar(año: int, carrera: str, fichas_agente: list[dict], glosario: list[dict] | None = None,
@@ -109,13 +146,26 @@ def armar(año: int, carrera: str, fichas_agente: list[dict], glosario: list[dic
     """Datos para la plantilla y lista de advertencias (documentos que no se encontraron)."""
     meeting = openf1.buscar_meeting(año, carrera)
     pilotos = _pilotos(meeting)
-    fichas, advertencias, reglamento_general = [], [], None
+    fichas, advertencias, reglamento_general, usadas = [], [], None, []
+    numeros = [f["documento"] for f in fichas_agente if not _es_race_control(f)]
+    oficiales = consultas.decisiones(año, carrera, numeros) if numeros else {}
+    en_pista = None  # sanciones de Race Control, se piden solo si alguna ficha las usa
 
     for f in fichas_agente:
-        rec = consultas.decision(año, carrera, f["documento"])
+        if _es_race_control(f):
+            if en_pista is None:
+                en_pista = _sanciones_race_control(año, meeting)
+            s = en_pista.get(str(f["documento"]).strip().upper())
+            if not s:
+                advertencias.append(f"No se encontró la sanción {f['documento']} en Race Control ({carrera} {año}).")
+                continue
+            fichas.append(_ficha_race_control(f, s, pilotos, año))
+            continue
+        rec = oficiales.get(str(f["documento"]))
         if not rec:
             advertencias.append(f"No se encontró el documento {f['documento']} de {carrera} {año}.")
             continue
+        usadas.append(rec)
         articulos = [a["article"] for a in rec.get("articulos") or []]
         cita = f.get("cita") or (articulos[0] if articulos else None)
         parrafo = _texto_reglamento(año, cita)
@@ -143,7 +193,17 @@ def armar(año: int, carrera: str, fichas_agente: list[dict], glosario: list[dic
             "doc": rec.get("documento"),
             "fecha": fecha_es(rec.get("fecha")),
             "url": rec.get("url"),
+            "vuelta": None,
         })
+
+    # Las decisiones de la FIA que Race Control anunció en pista muestran en qué vuelta fue
+    if usadas:
+        anuncios = [dict(s) for s in (en_pista if en_pista is not None else _sanciones_race_control(año, meeting)).values()]
+        sanciones.cruzar(anuncios, usadas)
+        vueltas = {s["documento_fia"]: s.get("vuelta") for s in anuncios if s["documento_fia"]}
+        for ficha in fichas:
+            if ficha["doc"] in vueltas:
+                ficha["vuelta"] = vueltas[ficha["doc"]]
 
     conteo: dict[str, int] = {}
     for f in fichas:
@@ -155,9 +215,9 @@ def armar(año: int, carrera: str, fichas_agente: list[dict], glosario: list[dic
             "circuito": (meeting or {}).get("location", ""),
             "fechas": _fechas(meeting),
             "reglamento": reglamento_general,
+            "usa_race_control": any(not f["url"] for f in fichas),
         },
         "generado": datetime.now().strftime("%d/%m/%Y"),
-        "sanciones": fichas,
         "fichas": fichas,
         "resumen": [(SINGULAR.get(t, t) if n == 1 else t, n)
                     for t, n in sorted(conteo.items(), key=lambda kv: -kv[1])[:4]],

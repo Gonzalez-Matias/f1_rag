@@ -5,10 +5,12 @@
 | openf1_calendario              | MCP f1-data (OpenF1)       | rondas de la temporada: nombre, lugar, fechas  |
 | openf1_buscar_piloto           | MCP f1-data (OpenF1)       | nombre -> número de auto / equipo              |
 | openf1_mensajes_race_control   | MCP f1-data (OpenF1)       | secuencia en vivo de Race Control              |
+| openf1_sanciones_en_pista      | MCP f1-data (OpenF1)       | sanciones anunciadas por Race Control          |
 | fia_decisiones_de_piloto       | MCP f1-data (FIA)          | decisiones oficiales: carrera o temporada      |
 | fia_decisiones_de_carrera      | MCP f1-data (FIA)          | todas las decisiones de una carrera            |
-| fia_ultima_decision_de_piloto  | MCP f1-data (FIA)          | sanción más reciente de un piloto              |
 | sanciones_de_piloto_completo   | MCP f1-data (OpenF1 + FIA) | piloto + decisiones + Race Control, en una     |
+| sanciones_de_carrera_completo  | MCP f1-data (OpenF1 + FIA) | toda la carrera, de las dos fuentes            |
+| ultimas_sanciones_de_piloto_completo | MCP f1-data (OpenF1 + FIA) | todas las de su última carrera sancionada |
 | buscar_en_reglamento           | local, RAG (Chroma)        | texto del artículo y glosario                  |
 | generar_informe                | local, propia              | resultado tangible: informe PDF/HTML           |
 """

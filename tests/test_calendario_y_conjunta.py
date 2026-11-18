@@ -1,4 +1,6 @@
 """Calendario (rondas y alias de carrera) y consulta conjunta OpenF1 + FIA. Sin red."""
+from datetime import date
+
 import pytest
 
 from agente_f1.fuentes import calendario, openf1, sanciones
@@ -89,7 +91,7 @@ def conjunta(monkeypatch, fuentes):
 
     monkeypatch.setattr(openf1, "buscar_piloto", lambda nombre, año, meeting_key=None: [BEARMAN])
     monkeypatch.setattr(openf1, "mensajes_comisarios",
-                        lambda meeting_key, auto=None: [{"fecha": "x", "mensaje": f"CAR {auto} (BEA) - meeting {meeting_key}"}])
+                        lambda meeting_key, auto=None, mensajes=None: [{"fecha": "x", "mensaje": f"CAR {auto} (BEA) - meeting {meeting_key}"}])
     monkeypatch.setattr(consultas, "sanciones_piloto", sanciones_piloto)
     return llamadas
 
@@ -136,3 +138,109 @@ def test_sanciones_de_piloto_en_toda_la_temporada(monkeypatch, fuentes):
         ("Italian Grand Prix", "3"), ("Italian Grand Prix", "9"),
         ("São Paulo Grand Prix", "3"), ("São Paulo Grand Prix", "9")]
     assert len(consultas.sanciones_piloto(2025, "Monza", 87)) == 2
+
+
+# ---------------------------------------------------------------- sanciones de Race Control
+
+def _rc(mensaje, fecha, vuelta=None, sesion=100, meeting=6):
+    return {"message": mensaje, "date": fecha, "lap_number": vuelta, "session_key": sesion, "meeting_key": meeting}
+
+
+MENSAJES_RC = [
+    _rc("FIA STEWARDS: REPRIMAND (DRIVING) FOR CAR 87 (BEA) - REVERSING IN THE PIT LANE (14:59:59)", "2025-11-08T18:17:00", sesion=99),
+    _rc("FIA STEWARDS: 5 SECOND TIME PENALTY FOR CAR 23 (ALB) - REJOINING UNSAFELY (14:50:05)", "2025-11-09T18:00:00", 42),
+    _rc("FIA STEWARDS: INCIDENT INVOLVING CAR 23 (ALB) UNDER INVESTIGATION - UNSAFE (14:50:05)", "2025-11-09T17:58:00", 40),
+    _rc("FIA STEWARDS: PENALTY SERVED - 5 SECOND TIME PENALTY FOR CAR 23 (ALB) (14:50:05)", "2025-11-09T18:04:00", 46),
+    _rc("FIA STEWARDS: 10 SECOND STOP/GO PENALTY FOR CAR 81 (PIA) - CAUSING A COLLISION", "2025-11-09T18:10:00", 50),
+    _rc("BLACK AND WHITE FLAG FOR CAR 51 (CAM) - TRACK LIMITS", "2025-11-09T18:19:00", 58),
+    _rc("CAR 4 (NOR) TIME 1:12.345 DELETED - TRACK LIMITS AT TURN 4", "2025-11-09T18:20:00", 59),
+]
+
+
+@pytest.fixture
+def race_control(monkeypatch, fuentes):
+    def get(endpoint, filtros="", _timeout=20, **params):
+        return {"meetings": MEETINGS, "race_control": MENSAJES_RC,
+                "sessions": [{"session_key": 99, "session_name": "Qualifying"}, {"session_key": 100, "session_name": "Race"}]}.get(endpoint, [])
+    monkeypatch.setattr(openf1, "get", get)
+
+
+def test_lee_las_sanciones_de_race_control(race_control):
+    res = openf1.sanciones_en_pista(2025, 6)
+    assert [(s["referencia"], s["numero_auto"], s["sancion"], s["sesion"]) for s in res["sanciones"]] == [
+        ("RC-1", 87, "REPRIMAND (DRIVING)", "Qualifying"),
+        ("RC-2", 23, "5 SECOND TIME PENALTY", "Race"),
+        ("RC-3", 81, "10 SECOND STOP/GO PENALTY", "Race")]
+    alb = res["sanciones"][1]
+    assert alb["motivo"] == "REJOINING UNSAFELY" and alb["vuelta"] == 42 and alb["cumplida"] and alb["vuelta_cumplida"] == 46
+    assert not res["sanciones"][2]["cumplida"]
+    assert [(b["numero_auto"], b["motivo"]) for b in res["banderas"]] == [(51, "TRACK LIMITS")]
+    # la referencia no cambia al filtrar por auto
+    assert [s["referencia"] for s in openf1.sanciones_en_pista(2025, 6, 81)["sanciones"]] == ["RC-3"]
+
+
+@pytest.mark.parametrize("texto, clave", [
+    ("5 SECOND TIME PENALTY", "5s"), ("Driver: 5 second time penalty", "5s"), ("10 SECOND STOP/GO PENALTY", "stop-go"),
+    ("10 second stop and go penalty", "stop-go"), ("DRIVE THROUGH PENALTY", "drive-through"),
+    ("Drive-through penalty", "drive-through"), ("Reprimand (Driving)", "reprimand"), ("€5000 fine", None)])
+def test_clave_de_sancion(texto, clave):
+    assert sanciones.clave_sancion(texto) == clave
+
+
+def test_cruza_cada_sancion_con_una_sola_decision():
+    en_pista = [{"referencia": f"RC-{i}", "numero_auto": 30, "sancion": t}
+                for i, t in enumerate(["5 SECOND TIME PENALTY", "10 SECOND TIME PENALTY", "5 SECOND TIME PENALTY"], 1)]
+    decisiones = [{"documento": "9", "numero_auto": 30, "decision": "10 second time penalty"},
+                  {"documento": "7", "numero_auto": 30, "decision": "5 second time penalty"},
+                  {"documento": "8", "numero_auto": 12, "decision": "5 second time penalty"}]
+    assert sanciones.cruzar(en_pista, decisiones) == ["RC-3"]
+    assert [s["documento_fia"] for s in en_pista] == ["7", "9", None]
+
+
+def test_carrera_completa_marca_lo_que_solo_esta_en_race_control(race_control, monkeypatch):
+    monkeypatch.setattr(consultas, "sanciones_carrera", lambda año, carrera, incluir_sin_sancion=False: [
+        {"carrera": carrera, "documento": "41", "numero_auto": 87, "decision": "Reprimand (Driving)"},
+        {"carrera": carrera, "documento": "60", "numero_auto": 23, "decision": "5 second time penalty"}])
+    res = sanciones.sanciones_de_carrera_completas(2025, "Brazil")
+    assert res["solo_en_race_control"] == ["RC-3"] and res["avisos"] == []
+    assert [s["documento_fia"] for s in res["sanciones_en_pista"]] == ["41", "60", None]
+
+
+def test_carrera_sin_documentos_fia_devuelve_race_control(race_control, monkeypatch):
+    def falla(*a, **k):
+        raise ValueError("todavía no tiene documentos de la FIA")
+    monkeypatch.setattr(consultas, "sanciones_carrera", falla)
+    res = sanciones.sanciones_de_carrera_completas(2025, "Brazil")
+    assert res["decisiones_fia"] == [] and res["solo_en_race_control"] == ["RC-1", "RC-2", "RC-3"]
+    assert "FIA" in res["avisos"][0]
+
+
+def _ultimas(monkeypatch, fia, en_pista):
+    pedidas = []
+    monkeypatch.setattr(openf1, "buscar_piloto", lambda nombre, año, meeting_key=None: [BEARMAN])
+    monkeypatch.setattr(consultas, "ultima_sancion", lambda auto, nombre=None: fia)
+    monkeypatch.setattr(openf1, "sanciones_en_pista", lambda año, meeting_key=None, numero_auto=None, mensajes=None:
+                        {"sanciones": en_pista if año == 2026 else [], "banderas": []})
+
+    def completas(nombre, año, carrera, incluir_sin_sancion=False):
+        pedidas.append((año, carrera))
+        return {"decisiones_fia": [], "avisos": []}
+    monkeypatch.setattr(sanciones, "sanciones_completas", completas)
+    return sanciones.ultimas_sanciones_completas("Bearman", date(2026, 11, 18)), pedidas
+
+
+def test_ultimas_sanciones_traen_toda_la_ultima_carrera(monkeypatch):
+    fia = {"fecha": "08 November 2026", "decision": "5 second time penalty", "año": 2026, "carrera": "São Paulo Grand Prix"}
+    vieja = {"fecha": "2026-11-07T18:17:00", "sancion": "REPRIMAND (DRIVING)", "piloto": "BEA", "numero_auto": 87,
+             "carrera": "São Paulo Grand Prix"}
+    res, pedidas = _ultimas(monkeypatch, fia, [vieja])
+    assert pedidas == [(2026, "São Paulo Grand Prix")] and res["sancion_mas_reciente_en"] == "FIA"
+
+    # una sanción en pista posterior, todavía sin documento, define la última carrera
+    nueva = {**vieja, "fecha": "2026-11-22T04:00:00", "sancion": "5 SECOND TIME PENALTY", "carrera": "Las Vegas Grand Prix"}
+    res, pedidas = _ultimas(monkeypatch, fia, [vieja, nueva])
+    assert pedidas == [(2026, "Las Vegas Grand Prix")] and res["sancion_mas_reciente_en"] == "Race Control"
+
+    # el mismo número en manos de otro piloto no cuenta
+    res, pedidas = _ultimas(monkeypatch, None, [{**nueva, "piloto": "XXX"}])
+    assert pedidas == [] and "No se encontraron" in res["resultado"]
