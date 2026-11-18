@@ -60,6 +60,7 @@ Requisitos: Python 3.11+ y `pdftotext` (poppler).
 ```bash
 # pdftotext (leer PDFs) y Pango (WeasyPrint, para generar el informe en PDF):
 # Linux: sudo apt install poppler-utils libpango-1.0-0 libpangoft2-1.0-0
+# Streamlit Community Cloud: se instalan solas desde packages.txt
 # macOS: brew install poppler pango
 # Windows: conda install -c conda-forge poppler  (y para el PDF del informe, GTK3 runtime:
 #          https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#windows).
