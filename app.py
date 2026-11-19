@@ -231,7 +231,7 @@ with st.sidebar:
 # ---------------------------------------------------------------- encabezado: conversación y modelo
 
 provider = provider_actual()
-h1, h2 = st.columns([5, 2.2], vertical_alignment="center")
+h1, h2 = st.container(key="pw-encabezado").columns([5, 2.2], vertical_alignment="center")
 with h1:
     if actual:
         st.markdown(f'<p class="pw-conv">{html.escape(actual["titulo"])}</p>', unsafe_allow_html=True)
