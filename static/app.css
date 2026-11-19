@@ -41,6 +41,19 @@ section[data-testid="stSidebar"] .st-key-informes-conv button:hover:not(:disable
 section[data-testid="stSidebar"] .st-key-informes-conv button p {font-size: .84rem;}
 
 /* ---------- encabezado ---------- */
+/* Fijo arriba: con chat_input la página baja sola hasta el final y se llevaría el selector de modelo. */
+[data-testid="stLayoutWrapper"]:has(> .st-key-pw-encabezado) {position: sticky; top: 0; z-index: 10;}
+.st-key-pw-encabezado {background: #fff; padding: .5rem 0 .4rem; border-bottom: 1px solid #e3e4ea;}
+.st-key-pw-encabezado [data-testid="stMarkdownContainer"] {margin-bottom: 0;}  /* Streamlit lo trae en -1rem */
+.st-key-pw-encabezado [data-testid="stColumn"] [data-testid="stVerticalBlock"] {gap: .15rem;}
+.st-key-pw-encabezado .pw-meta {white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+/* con la barra lateral cerrada, la franja superior de Streamlit es opaca: el encabezado va debajo */
+[data-testid="stAppViewContainer"]:has([data-testid="stSidebar"][data-collapsed="true"])
+    [data-testid="stLayoutWrapper"]:has(> .st-key-pw-encabezado) {top: 3.75rem;}
+@media (max-width: 640px) {  /* las columnas se apilan: solo queda lo que hace falta */
+    .st-key-pw-encabezado [data-testid="stColumn"]:not(:has(.pw-conv, [data-testid="stPopover"])) {display: none;}
+    .st-key-pw-encabezado .pw-meta {display: none;}
+}
 h1, h2, h3 {font-style: italic !important;}
 h2, h3 {text-transform: uppercase; letter-spacing: .02em;}
 .pw-conv {font: italic 700 1.35rem/1.1 'Barlow Condensed', sans-serif; margin: .2rem 0 0;}
